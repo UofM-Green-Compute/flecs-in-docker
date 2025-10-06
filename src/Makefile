@@ -1,7 +1,7 @@
 # Simple, reproducible Makefile for C++20/23 + Flecs (single-file C lib)
 # Works inside Ubuntu 24.04 LTS container with build-essential installed.
 
-APP_BINARY := printer
+APP_BINARY := ecs_application
 
 # Discover base working dir (repo root) from this Makefile’s location
 ifndef BWD
