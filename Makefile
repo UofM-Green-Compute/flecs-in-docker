@@ -18,6 +18,9 @@ all:
 	@echo
 	@echo "NB: final artefacts live in 'bin'"
 
+env:
+	@echo "$(BWD)"
+
 docker:
 	docker build -t buildenv -f Dockerfile .
 
@@ -35,6 +38,14 @@ dockerbash: prepare
 	           $(BINMOUNT) \
 	           buildenv \
 	           /bin/bash
+
+run: prepare
+	docker run -it --rm -u1000:1000 -e BWD=$(BWD) \
+	           $(BWDMOUNT) \
+	           $(BUILDMOUNT) \
+	           $(BINMOUNT) \
+	           buildenv \
+	           $(BWD)/bin/printer
 
 
 dockerbuild: prepare
