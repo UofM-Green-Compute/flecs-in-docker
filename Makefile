@@ -45,8 +45,7 @@ run: prepare
 	           $(BUILDMOUNT) \
 	           $(BINMOUNT) \
 	           buildenv \
-	           $(BWD)/bin/printer
-
+	           make BWD=$(BWD) -f $(BWD)/src/Makefile run
 
 dockerbuild: prepare
 	docker run -it --rm -u1000:1000 -e BWD=$(BWD) \
@@ -58,4 +57,4 @@ devloop:
 	make clean
 	make prepare
 	make dockerbuild
-	make BWD=$(BWD) -f $(BWD)/src/Makefile run
+	make run
