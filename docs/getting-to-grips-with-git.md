@@ -7,12 +7,17 @@ Cribsheet:
 
 * `git clone` *some-remote-source*
 
+This clones the remote repository. The common way of doing this is the
+following git@ line which uses ssh to do the cloning
+
     git clone git@github.com:UofM-Green-Compute/flecs-in-docker.git
 
 # Making Changes
 ## Stage changes that you want to capture
 
 * `git add` *some* *list* *of* *filenames*
+
+Example usage:
 
     git add somefile.cpp
     git add main.cpp
@@ -43,6 +48,7 @@ Or a simple short description
 
 If you're dropped into `vi` it means your editor isn't set and
 the way to get out of it is:
+
     * Press "i" to switch to insert mode - and type your commit message
     * Press `esc` to get back to command mode
     * Type `:w` to write you commit message to disk
@@ -52,7 +58,7 @@ the way to get out of it is:
 
 # Sharing changes - successfully
 
-* git push <where> <what>
+* `git push` ***where what***
 
 This is where you push and it just works:
 
@@ -69,7 +75,7 @@ This is where you push and it just works:
 
 # Sharing changes - failure
 
-* git push <where> <what>
+* `git push` ***where what***
 
 If you try to push to the server after someone else has pushed changes,
 without fetching theirs, you'll get this error:
@@ -167,4 +173,3 @@ Note that this is `git diff origin/main...main` not `git diff origin/main main`.
     Successfully rebased and updated refs/heads/main.
 
 If you're not happy, you get a chance to fix things here *before* the changes are merged.
-
