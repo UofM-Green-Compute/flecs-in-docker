@@ -35,7 +35,9 @@ int main(int, char *[]) {
     ecs.entity("e3")
         .set<Position>({10, 20});
 
-    ecs.progress();
+    while (true) {
+        ecs.progress();
+    }
     // // Run the system 10 times
     // for(auto iter=10; iter--;) {
     //     s.run();
