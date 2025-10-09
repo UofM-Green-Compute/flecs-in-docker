@@ -173,3 +173,9 @@ Note that this is `git diff origin/main...main` not `git diff origin/main main`.
     Successfully rebased and updated refs/heads/main.
 
 If you're not happy, you get a chance to fix things here *before* the changes are merged.
+
+
+#### Finally push your combination of local and remote changes:
+
+* `git push` ***where what***
+
