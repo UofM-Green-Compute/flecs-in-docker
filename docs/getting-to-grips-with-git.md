@@ -179,3 +179,15 @@ If you're not happy, you get a chance to fix things here *before* the changes ar
 
 * `git push` ***where what***
 
+For example:
+
+    $ git push origin main 
+    Enumerating objects: 7, done.
+    Counting objects: 100% (7/7), done.
+    Delta compression using up to 16 threads
+    Compressing objects: 100% (4/4), done.
+    Writing objects: 100% (4/4), 434 bytes | 434.00 KiB/s, done.
+    Total 4 (delta 3), reused 0 (delta 0), pack-reused 0
+    remote: Resolving deltas: 100% (3/3), completed with 3 local objects.
+    To github.com:UofM-Green-Compute/flecs-in-docker.git
+       3050a26..4528cb1  main -> main
