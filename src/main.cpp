@@ -34,9 +34,15 @@ int main(int, char *[]) {
     // This entity will not match as it does not have Position, Velocity
     ecs.entity("e3")
         .set<Position>({10, 20});
-
+    
+    int i = 1;
     while (true) {
+        std::cout << i << "\n";
+        i = i + 1;
         ecs.progress();
+        if (i == 200) {
+            break;
+        }
     }
     // // Run the system 10 times
     // for(auto iter=10; iter--;) {
