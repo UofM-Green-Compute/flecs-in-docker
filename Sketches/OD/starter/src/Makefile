@@ -11,6 +11,7 @@ endif
 SRC := $(BWD)/src
 INC := $(BWD)/include
 OBJ := $(BWD)/bin
+RUNDIR := $(BWD)/bin
 
 # --- toolchain & flags -------------------------------------------------------
 CXX      ?= g++
@@ -54,7 +55,7 @@ clean:
 	$(RM) -f $(OBJECTS) $(DEPS) $(app)
 
 run: all
-	$(app)
+	cd $(RUNDIR) ; $(app)
 
 -include $(DEPS)
 
