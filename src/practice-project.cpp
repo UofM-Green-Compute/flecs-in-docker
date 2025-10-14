@@ -7,7 +7,7 @@ Not sure what to do about that.
 
 /* 
 DO NOT BUILD USING VSCODE !!!!!!!!!!
-
+*/
 
 #include <iostream>
 #include <flecs.h>
@@ -17,5 +17,5 @@ int main()
 {
     std::cout<<"Hello World"<<std::endl; 
 }
-*/
+
 

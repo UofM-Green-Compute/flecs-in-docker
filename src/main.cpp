@@ -1,3 +1,4 @@
+/*
 #include <flecs.h>
 #include <systems.h>
 #include <iostream>
@@ -35,18 +36,11 @@ int main(int, char *[]) {
     ecs.entity("e3")
         .set<Position>({10, 20});
     
-    int i = 1;
-    while (true) {
-        std::cout << i << "\n";
-        i = i + 1;
-        ecs.progress();
-        if (i == 200) {
-            break;
-        }
-    }
+
     // // Run the system 10 times
-    // for(auto iter=10; iter--;) {
-    //     s.run();
-    //     std::cout << "----\n";
-    // }
+    for(auto iter=10; iter--;) {
+         s.run();
+         std::cout << "----\n";
+     }
 }
+*/
