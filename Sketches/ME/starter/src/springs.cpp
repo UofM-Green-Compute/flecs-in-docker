@@ -6,8 +6,11 @@ graphs and maybe even simulations.
 #include <iostream>
 #include <flecs.h>
 #include <systems.h>
+#include <fstream>
 
-double k = 2; // Spring Constant in Nm-1
+double k = 2; // Spring Constant in N cm-1
+
+double b = 10; // Damping Coefficient in s-1
 
 struct Position { 
     double x; // In cm
@@ -31,9 +34,9 @@ int main() {
     // Create a system for Position, Velocity, Acceleration..
     flecs::system s = ecs.system<Position, Velocity, Acceleration, const Mass>()
         .each([](flecs::entity e, Position& p, Velocity& v, Acceleration& a, const Mass& mass) {
-            a.x = - (k*p.x)/mass.m;
-            v.x += a.x;
-            p.x += v.x;
+            a.x = - b*v.x - (k*p.x)/mass.m;
+            v.x += a.x/(100);
+            p.x += v.x/(100);
             std::cout << e.name() << ": {" << p.x << ", " << v.x << "," << a.x << "}\n";
         });
 
@@ -43,7 +46,11 @@ int main() {
         .set<Acceleration>({0})
         .set<Mass>({3});
     
-    for(auto iter=10; iter--;) {
+    std::ofstream MyFile("SFM-Data.txt");
+    MyFile << "Hello file world" << std::endl;
+    MyFile.close();
+
+    for(auto iter=100; iter--;) {
         s.run();
         std::cout << "----\n";
     }
