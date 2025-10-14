@@ -16,6 +16,7 @@ graphs and maybe even simulations.
 */
 #include <iostream>
 #include <fstream> 
+#include <vector>
 #include <flecs.h>
 #include <systems.h>
 
@@ -40,14 +41,22 @@ struct Mass{
 
 
 int main() {
+    std::ofstream MyFile("SHM-Data.txt");
+    std::vector<double> testing_pos; 
+    std::vector<double> testing_vel;
+    std::vector<double> testing_acc;
+
     flecs::world ecs;
     // Create a system for Position, Velocity, Acceleration..
     flecs::system s = ecs.system<Position, Velocity, Acceleration, const Mass>()
-        .each([](flecs::entity e, Position& p, Velocity& v, Acceleration& a, const Mass& mass) {
+        .each([&](flecs::entity e, Position& p, Velocity& v, Acceleration& a, const Mass& mass) {
             a.x = - (k*p.x)/mass.m - 2 * gamma * v.x ;
             v.x += a.x / 100;
             p.x += v.x / 100;
             std::cout << e.name() << ": {" << p.x << ", " << v.x << "," << a.x << "}\n";
+            testing_pos.push_back(p.x); 
+            testing_vel.push_back(v.x);
+            testing_acc.push_back(a.x);
         });
 
     ecs.entity("e1")
@@ -55,15 +64,16 @@ int main() {
         .set<Velocity>({1})
         .set<Acceleration>({0})
         .set<Mass>({3});
-
-    std::ofstream MyFile("SHM-Data.txt");
-    MyFile << "Hello file world" << std::endl;
-    MyFile.close();
-
+    
     for(auto iter=100; iter--;) {
         s.run();
         std::cout << "----\n";
     }
+
+    for(auto i=100; i--;) {
+        MyFile << testing_pos[i] << ", " << testing_vel[i] << "," << testing_acc[i] << std::endl;
+    }
+    MyFile.close();
     
 }
 
