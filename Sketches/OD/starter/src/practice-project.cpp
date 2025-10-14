@@ -15,6 +15,7 @@ oscillator. Hopefully we will also be able to produce visual
 graphs and maybe even simulations.
 */
 #include <iostream>
+#include <fstream> 
 #include <flecs.h>
 #include <systems.h>
 
@@ -54,8 +55,9 @@ int main() {
         .set<Acceleration>({0})
         .set<Mass>({3});
 
-    
-    std::cout<<"Hello World"<<std::endl; 
+    std::ofstream MyFile("SHM-Data.txt");
+    MyFile << "Hello file world" << std::endl;
+    MyFile.close();
 
     for(auto iter=10; iter--;) {
         s.run();
