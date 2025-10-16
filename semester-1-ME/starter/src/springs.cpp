@@ -9,9 +9,11 @@ graphs and maybe even simulations.
 #include <flecs.h>
 #include <systems.h>
 
+// Defines Spring Properties
 double k = 2; // Spring Constant in Nm-1
 double b = 1; // Damping coefficient in s-1
 
+// Defines Particle Properties
 double x1 = 0; // Entity 1 initial position
 double v1 = 2; // Entity 1 initial velocity
 double m1 = 3; // Entity 1 initial mass
@@ -32,7 +34,6 @@ struct Acceleration{
 struct Mass{
     double m; // in kg
 };
-
 
 int main() {
     std::ofstream MyFile("SHM-Data.txt");
@@ -59,7 +60,7 @@ int main() {
         .set<Acceleration>({a1})
         .set<Mass>({m1});
     
-    for(auto iter=0; iter<10; iter++) {
+    for(auto iter=0; iter<100; iter++) {
         if (iter == 0) {
             testing_pos.push_back(x1); 
             testing_vel.push_back(v1);
