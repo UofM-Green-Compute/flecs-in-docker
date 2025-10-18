@@ -4,10 +4,12 @@
 BWD := $(shell pwd)
 
 BWDMOUNT := -v $(BWD):$(BWD):ro
-BUILDMOUNT := -v $(BWD)/build:$(BWD)/build:delegated
-BINMOUNT := -v $(BWD)/bin:$(BWD)/bin:delegated
+BUILDMOUNT := -v $(BWD)/build:$(BWD)/build
+BINMOUNT := -v $(BWD)/bin:$(BWD)/bin
+INPUTSMOUNT := -v $(BWD)/inputs:$(BWD)/inputs
+OUTPUTSMOUNT := -v $(BWD)/outputs:$(BWD)/outputs
 
-MOUNTS := $(BWDMOUNT) $(BUILDMOUNT) $(BINMOUNT)
+MOUNTS := $(BWDMOUNT) $(BUILDMOUNT) $(BINMOUNT) $(INPUTSMOUNT) $(OUTPUTSMOUNT)
 
 all:
 	@echo "make docker - build docker container"
@@ -33,17 +35,13 @@ clean:
 
 dockerbash: prepare
 	docker run -it --rm -u1000:1000 -e BWD=$(BWD) \
-	           $(BWDMOUNT) \
-	           $(BUILDMOUNT) \
-	           $(BINMOUNT) \
+	           $(MOUNTS) \
 	           buildenv \
 	           /bin/bash
 
 run: prepare
 	docker run -it --rm -u1000:1000 -e BWD=$(BWD) \
-	           $(BWDMOUNT) \
-	           $(BUILDMOUNT) \
-	           $(BINMOUNT) \
+	           $(MOUNTS) \
 	           buildenv \
 	           make BWD=$(BWD) -f $(BWD)/src/Makefile run
 
