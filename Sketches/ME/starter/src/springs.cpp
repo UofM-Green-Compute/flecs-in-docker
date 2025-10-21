@@ -1,7 +1,16 @@
 /*
-This code runs a simulation of two coupled oscillators.
-The two masses are connected to walls by springs and to each other by springs.
-This is a one dimensional simulation.
+This code runs a simulation of N coupled oscillators.
+
+Each mass has equations of motion depending on the properties
+the springs it is connected to. 
+
+Entity types:
+Spring_Ball: /\/\/\/\/\/O
+Spring_Wall: /\/\/\/\/\/|
+Wall:        |
+
+Example setup: Wall - Spring_Ball - Spring_Ball - Spring_Wall
+     - |/\/\/\/\/\/O/\/\/\/\/\/O/\/\/\/\/\/|
 */
 #include <iostream>
 #include <fstream> 
@@ -30,21 +39,15 @@ struct Spring_Constant{
     double k; // in Ncm-1
 };
 
-struct Damping_Coefficient{
-    double b; // in s-1
+struct Natural_Length{
+    double l; // Spring's natural length in cm
 };
 
-struct Spring_Length{
-    double l; // in cm
-};
+struct Spring_Ball{ }; // creates a Spring_Ball tag
 
-struct Spring_Number{
-    int num; // Tells program which spring it is
-}
+struct Spring_Wall{ }; // creates a Spring Wall tag
 
-struct Particle{ }; // creates a particle tag
-
-struct Spring{ }; // creates a spring tag
+struct Wall{ }; // creates a Wall tag
 
 int main() {
     std::ofstream MyFile("SHM-Data.txt");
@@ -54,92 +57,55 @@ int main() {
 
     flecs::world ecs;
 
-    flecs::query<const position, Particle> particles = 
-        ecs.query<const Position, Particle>("ParticleQuery");
+    flecs::system s = ecs.system<Velocity>() 
+        .each([](flecs::entity e) {
 
-    flecs::query<const position, Spring> spring = 
-        ecs.query<const Position, Spring>("SpringQuery");
-    // Create a system to find initial acceleration
-    /*
-    flecs::system initial = ecs.system<>()
-    */
-
-    // Create a system for Position, Velocity, Acceleration..
-    /*
-    flecs::system s = ecs.system<Position, Velocity, Acceleration, const Mass>()
-        .each([&](flecs::entity e, Position& p, Velocity& v, Acceleration& a, const Mass& mass) {
-            a.x = - (k * p.x) / mass.m - b * v.x ;
-            v.x += a.x / 100;
-            p.x += v.x / 100;
-            std::cout << e.name() << ": {" << p.x << "," << v.x << "," << a.x << "}\n";
-            testing_pos.push_back(p.x); 
-            testing_vel.push_back(v.x);
-            testing_acc.push_back(a.x);
+            std::cout << e.name() << "\n";
+            
         });
-    */
 
     // Create Entities
-    ecs.entity("mass 1")
+    ecs.entity("Left Wall")
         // Finds and sets components
-        .set<Position>({3})
-        .set<Velocity>({-1})
-        .set<Acceleration>({0})
-        .set<Mass>({4})
+        .set<Position>({0})
 
         // Adds Particle Tag
-        .add<Particle>();
+        .add<Wall>();
     
-    ecs.entity("mass 2")
+    ecs.entity("mass 1")
         // Finds and sets components
+        .set<Mass>({4})
         .set<Position>({5})
         .set<Velocity>({3})
         .set<Acceleration>({0})
-        .set<Mass>({4})
-
+        .set<Spring_Constant>({3})
+        .set<Natural_Length>({4})
+        
         // Adds a Particle Tag
-        .add<Particle>();
+        .add<Spring_Ball>();
 
-    ecs.entity("spring 1")
-        //Finds and sets components
-        .set<Spring_Constant>({2})
-        .set<Damping_Coefficient>({1})
-        .set<Spring_Length>({2})
-        .set<Spring_Number>({1})
-
-        // Add a Spring Tag
-        .add<Spring>();
+    ecs.entity("mass 2")
+        // Finds and sets components
+        .set<Mass>({4})
+        .set<Position>({6})
+        .set<Velocity>({0})
+        .set<Acceleration>({0})
+        .set<Spring_Constant>({3})
+        .set<Natural_Length>({4})
+        
+        // Adds a Particle Tag
+        .add<Spring_Ball>();
     
-    ecs.entity("spring 2")
-        //Finds and sets components
-        .set<Spring_Constant>({2})
-        .set<Damping_Coefficient>({1})
-        .set<Spring_Length>({2})
-        .set<Spring_Number>({2})
+    ecs.entity("Right Wall")
+        // Finds and sets components
+        .set<Position>({12})
+        .set<Spring_Constant>({3})
+        .set<Natural_Length>({4})
+        
+        // Adds a Particle Tag
+        .add<Spring_Wall>();
 
-        // Add a Spring Tag
-        .add<Spring>();
 
-    ecs.entity("spring 3")
-        //Finds and sets components
-        .set<Spring_Constant>({2})
-        .set<Damping_Coefficient>({1})
-        .set<Spring_Length>({2})
-        .set<Spring_Number>({3})
-
-        // Add a Spring Tag
-        .add<Spring>();
-    
-    for(auto iter=0; iter<100; iter++) {
-        if (iter == 0) {
-            testing_pos.push_back(x1); 
-            testing_vel.push_back(v1);
-            testing_acc.push_back(a1);
-            std::cout << "e1: {" << x1 << ", " << v1 << "," << a1 << "}\n";
-        } else {
-        s.run();
-        }
-        std::cout << "----\n";
-        MyFile << testing_pos[iter] << "," << testing_vel[iter] << "," << testing_acc[iter] << std::endl;  
-    }
+    s.run();
 
 }
