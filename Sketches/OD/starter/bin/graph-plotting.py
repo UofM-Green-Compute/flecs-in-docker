@@ -1,14 +1,18 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import matplotlib.animation as animation
+from matplotlib.animation import PillowWriter
+from matplotlib.animation import FuncAnimation 
 
-file = open("SHM-Data.txt")
+# Open data file
+file = open("/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/starter/bin/SHM-Data.txt")
 
+# Define number of data points variable, arrays to store components
 no_points = 0
 pos = []
 vel = []
 acc = []
 
+# Read data in from file
 for i,row in enumerate(file): 
     if (i == 0):
         no_points = int(row)
@@ -19,36 +23,70 @@ for i,row in enumerate(file):
         acc.append(float(row[2])) 
 
 t = np.linspace(0,no_points,no_points)
+zeroes = np.zeros((no_points,1))
 
-fig, ax = plt.subplots(3)
+# Graph formatting
+fig, [ax, ax1, ax2, ax3] = plt.subplots(4)
 plt.suptitle("Simple Harmonic Oscillator")
-
-ax[0].plot(t,pos,label="Position")
-ax[0].set_title("Position")
-ax[1].plot(t,vel,color='Orange',label="Velocity")
-ax[1].set_title("Velocity")
-ax[2].plot(t,acc,color='Red',label="Acceleration")
-ax[2].set_title("Acceleration")
+ax.set_title("Position")
+ax1.set_title("Velocity")
+ax2.set_title("Acceleration")
+ax3.set_title("Particle")
 fig.tight_layout()
 
+# Animation
+graph0, = ax.plot(t,pos,label="Position")
+graph1, = ax1.plot(t,vel,color="Orange",label="Velocity")
+graph2, = ax2.plot(t,acc,color="Red",label="Velocity")
+graph3, = ax3.plot(0,0,'o',color="Red",label="Velocity")
+
+ax3.set_xlim(min(pos),max(pos))
+ax3.set_ylim(min(pos),max(pos))
+
 for ax in fig.get_axes():
-    ax.label_outer()
+   ax.label_outer()
 
-artists = []
+def position(frame):
+        return graph0.set_data(t[:frame],pos[:frame])
 
-"""
-ani = animation.ArtistAnimation(fig=fig, artists=artists, interval=400)
+def velocity(frame):
+    return graph1.set_data(t[:frame],vel[:frame])
 
-fig, ax = plt.subplots()
+def acceleration(frame):
+    return graph2.set_data(t[:frame],acc[:frame])
 
-def animate(i):
-    ax.clear()
-    point = pos[i]
-    ax.plot(point,0,color = 'red', marker = 'o')
-    ax.set_xlim([-5, 100])
-    ax.set_ylim([-5, 5])
+def particle(frame):
+    return graph3.set_data([pos[frame]],zeroes[frame])
 
-ani = animation.FuncAnimation(fig, animate, frames=no_points,interval=5, repeat=False)
-#plt.close()
-"""
+ani = FuncAnimation(fig, position, frames=len(t), interval=10)
+ani1 = FuncAnimation(fig, velocity, frames=len(t), interval=10)
+ani2 = FuncAnimation(fig, acceleration, frames=len(t), interval=10)
+ani3 = FuncAnimation(fig, particle, frames=len(t), interval=10)
+
 plt.show()
+
+# Making a gif
+metadata = dict(title="Movie", artist="Oluwole")
+writer = PillowWriter(fps=100, metadata=metadata)
+
+time_list = []
+pos_list = [] 
+vel_list = []
+acc_list = []
+zero = []
+
+with writer.saving(fig, "Oscillator.gif", 100):
+    for i,time in enumerate(t):
+        time_list.append(time)
+        pos_list.append(pos[i])
+        vel_list.append(vel[i])
+        acc_list.append(acc[i])
+        zero.append(0)
+
+        graph0.set_data(time_list,pos_list)
+        graph1.set_data(time_list,vel_list)
+        graph2.set_data(time_list,acc_list)
+        graph3.set_data(pos_list[-1:],zero[-1:])
+        writer.grab_frame()
+
+
