@@ -21,8 +21,9 @@ double v1 = 2; // Entity 1 initial velocity
 double m1 = 3; // Entity 1 initial mass
 double a1 = - (k*x1)/m1 - b * v1; // Entity 1 initial acceleration
 float w1 = std::sqrt( k / m1); // Entity 1 - Frequency of the mass-spring system 
-
-int T = ( (2 * M_PI) / w1 ) * 1000; // Time the spring system runs for in ms 
+int time_period = ( (2 * M_PI) / w1 ); // Time the spring system runs for in s 
+int time_unit = 100; 
+int run_time = time_period * time_unit; 
 
 
 struct Position { 
@@ -54,7 +55,7 @@ int main() {
     {
         std::cout<<"All good"<<std::endl; 
     }
-    MyFile << T << std::endl;
+    MyFile << run_time << std::endl;
 
     std::vector<double> pos; 
     std::vector<double> vel;
@@ -65,8 +66,8 @@ int main() {
     flecs::system s = ecs.system<Position, Velocity, Acceleration, const Mass>()
         .each([&](flecs::entity e, Position& p, Velocity& v, Acceleration& a, const Mass& mass) {
             a.x = - (k*p.x)/mass.m - 2 * b * v.x ;
-            v.x += a.x / 1000;
-            p.x += v.x / 1000;
+            v.x += a.x / time_unit;
+            p.x += v.x / time_unit;
             std::cout << e.name() << ": {" << p.x << ", " << v.x << "," << a.x << "}\n";
             pos.push_back(p.x); 
             vel.push_back(v.x);
@@ -79,12 +80,12 @@ int main() {
         .set<Acceleration>({a1})
         .set<Mass>({m1});
     
-    for(auto iter=T; iter--;) 
+    for(auto iter=run_time; iter--;) 
     {
         s.run();
         std::cout << "----\n";
     }
-    for(int i = 0; i < T; i++) 
+    for(int i = 0; i < run_time; i++) 
     {
         MyFile << pos[i] << ", " << vel[i] << "," << acc[i] << "," << i << std::endl; 
     }
