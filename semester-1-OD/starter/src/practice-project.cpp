@@ -1,27 +1,29 @@
 /*
-There seems to be a problem where if you uncomment this code and then try make dockerbuild,
-there is confusion because there are no two main() functions (one here and one in main.cpp).
-
-Not sure what to do about that.
+This code models a one dimensional simple or damped hamonic oscillator. 
+Aims: 
+- Produce graphs
+- Animate simulations
 */
+// DO NOT BUILD USING VSCODE !!!!!!!!!!
 
-/* 
-DO NOT BUILD USING VSCODE !!!!!!!!!!
-*/
-
-/*
-This code models a one dimensional simple or damped hamonic 
-oscillator. Hopefully we will also be able to produce visual
-graphs and maybe even simulations.
-*/
 #include <iostream>
 #include <fstream> 
 #include <vector>
+#include <cmath>
 #include <flecs.h>
 #include <systems.h>
 
 double k = 2; // Spring Constant in Nm-1
-double gamma = 10; 
+double b = 0; // Damping coefficient in s-1
+
+double x1 = 0; // Entity 1 initial position
+double v1 = 2; // Entity 1 initial velocity
+double m1 = 3; // Entity 1 initial mass
+double a1 = - (k*x1)/m1 - b * v1; // Entity 1 initial acceleration
+float w1 = std::sqrt( k / m1); // Entity 1 - Frequency of the mass-spring system 
+
+int T = ( (2 * M_PI) / w1 ) * 1000; // Time the spring system runs for in ms 
+
 
 struct Position { 
     double x; // In cm
@@ -41,37 +43,50 @@ struct Mass{
 
 
 int main() {
-    std::ofstream MyFile("SHM-Data.txt");
-    std::vector<double> testing_pos; 
-    std::vector<double> testing_vel;
-    std::vector<double> testing_acc;
+    std::ofstream MyFile; 
+    MyFile.open("SHM-Data.txt");
+    if (!MyFile.is_open())
+    {
+        std::cout<<"Error in creating file"<<std::endl; 
+        return 1; 
+    }
+    else
+    {
+        std::cout<<"All good"<<std::endl; 
+    }
+    MyFile << T << std::endl;
+
+    std::vector<double> pos; 
+    std::vector<double> vel;
+    std::vector<double> acc;
 
     flecs::world ecs;
     // Create a system for Position, Velocity, Acceleration..
     flecs::system s = ecs.system<Position, Velocity, Acceleration, const Mass>()
         .each([&](flecs::entity e, Position& p, Velocity& v, Acceleration& a, const Mass& mass) {
-            a.x = - (k*p.x)/mass.m - 2 * gamma * v.x ;
-            v.x += a.x / 100;
-            p.x += v.x / 100;
+            a.x = - (k*p.x)/mass.m - 2 * b * v.x ;
+            v.x += a.x / 1000;
+            p.x += v.x / 1000;
             std::cout << e.name() << ": {" << p.x << ", " << v.x << "," << a.x << "}\n";
-            testing_pos.push_back(p.x); 
-            testing_vel.push_back(v.x);
-            testing_acc.push_back(a.x);
+            pos.push_back(p.x); 
+            vel.push_back(v.x);
+            acc.push_back(a.x);
         });
 
     ecs.entity("e1")
-        .set<Position>({0})
-        .set<Velocity>({1})
-        .set<Acceleration>({0})
-        .set<Mass>({3});
+        .set<Position>({x1})
+        .set<Velocity>({v1})
+        .set<Acceleration>({a1})
+        .set<Mass>({m1});
     
-    for(auto iter=100; iter--;) {
+    for(auto iter=T; iter--;) 
+    {
         s.run();
         std::cout << "----\n";
     }
-
-    for(auto i=100; i--;) {
-        MyFile << testing_pos[i] << ", " << testing_vel[i] << "," << testing_acc[i] << std::endl;
+    for(int i = 0; i < T; i++) 
+    {
+        MyFile << pos[i] << ", " << vel[i] << "," << acc[i] << "," << i << std::endl; 
     }
     MyFile.close();
     
