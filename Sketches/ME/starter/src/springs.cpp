@@ -11,13 +11,13 @@ graphs and maybe even simulations.
 
 // Defines Spring Properties
 double k = 2; // Spring Constant in Nm-1
-double b = 1; // Damping coefficient in s-1
+double b = 10; // Damping coefficient in s-1
 
 // Defines Particle Properties
 double x1 = 0; // Entity 1 initial position
 double v1 = 2; // Entity 1 initial velocity
 double m1 = 3; // Entity 1 initial mass
-double a1 = - (k*x1)/m1 - b * v1; // Entity 1 initial acceleration
+double a1 = - (k * x1) / m1 - b * v1; // Entity 1 initial acceleration
 
 struct Position { 
     double x; // In cm
@@ -45,7 +45,7 @@ int main() {
     // Create a system for Position, Velocity, Acceleration..
     flecs::system s = ecs.system<Position, Velocity, Acceleration, const Mass>()
         .each([&](flecs::entity e, Position& p, Velocity& v, Acceleration& a, const Mass& mass) {
-            a.x = - (k*p.x)/mass.m - b * v.x ;
+            a.x = - (k * p.x) / mass.m - b * v.x ;
             v.x += a.x / 100;
             p.x += v.x / 100;
             std::cout << e.name() << ": {" << p.x << "," << v.x << "," << a.x << "}\n";
