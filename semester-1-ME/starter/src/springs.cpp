@@ -24,7 +24,7 @@ Example setup: Wall - Spring_Ball - Spring_Ball - Spring_Wall
 #include <systems.h>
 
 //Position of the Left Wall
-const std::vector<double> x_Lwall = {0, 0};  // in cm
+std::vector<double> x_Lwall = {0, 0};  // in cm
 
 //Initial Position of the first mass
 std::vector<double> x1 = {5, 5}; // in cm
@@ -33,7 +33,7 @@ std::vector<double> x1 = {5, 5}; // in cm
 std::vector<double> x2 = {7, 7}; // in cm   
 
 // Position of the Right Wall
-const std::vector<double> x_Rwall = {12, 12}; // in cm
+std::vector<double> x_Rwall = {12, 12}; // in cm
 
 //Spring Constant of the first spring
 double k1 = 3; // in N cm-1
@@ -48,21 +48,22 @@ double k3 = 3; // in N cm-1
 double l1 = 4; // in N cm-1
 
 // Natural Length of the second spring
-double l1 = 4; // in N cm-1
+double l2 = 4; // in N cm-1
 
 // Natural Length of the third spring
-double l1 = 4; // in N cm-1
+double l3 = 4; // in N cm-1
+
 
 struct Position { 
-    std::vector<double> x_before, x_after; // In cm
+    std::vector<double> &x_middle; // In cm
 };
 
 struct Position_Left { 
-    std::vector<double> x_before, x_after; // In cm
+    std::vector<double> &x_left; // In cm
 };
 
 struct Position_Right { 
-    std::vector<double> x_before, x_after; // In cm
+    std::vector<double> &x_right; // In cm
 };
 
 struct Velocity { 
@@ -108,22 +109,22 @@ int main() {
     std::vector<double> testing_acc;
 
     flecs::world ecs;
-
+    /*
     // System s runs for any entity with the tag Spring_Ball
     flecs::system s = ecs.system<Spring_Ball>() 
         .each([](flecs::entity e, const Mass& mass, Position& x1, 
             Velocity& v,Acceleration& a, Spring_Constant& k1,
             Natural_Length& l) {
-               
-            
+
             std::cout << e.name() << "\n";
             
         });
+    */
 
     // Create Entities
     ecs.entity("Left Wall")
         // Finds and sets components
-        .set<Position>({&x_Lwall})
+        .set<Position>({x_Lwall})
 
         // Adds Particle Tag
         .add<Wall>();
@@ -131,7 +132,9 @@ int main() {
     ecs.entity("mass 1")
         // Finds and sets components
         .set<Mass>({4})
-        .set<Position>({5})
+        .set<Position_Left>({x_Lwall})
+        .set<Position>({x1})
+        .set<Position_right>
         .set<Velocity>({3})
         .set<Acceleration>({0})
         .set<Spring_Constant>({3})
@@ -143,7 +146,8 @@ int main() {
     ecs.entity("mass 2")
         // Finds and sets components
         .set<Mass>({4})
-        .set<Position>({6})
+        .set<Position>({x2})
+        .set<Position_Left>({x1})
         .set<Velocity>({0})
         .set<Acceleration>({0})
         .set<Spring_Constant>({3})
@@ -154,21 +158,14 @@ int main() {
     
     ecs.entity("Right Wall")
         // Finds and sets components
-        .set<Position>({12})
+        .set<Position>({x_Rwall})
         .set<Spring_Constant>({3})
         .set<Natural_Length>({4})
         
         // Adds a Particle Tag
         .add<Spring_Wall>();
-
-    // Create an ordered list of the entities by position
-    std::vector<flecs::entity> ordered;
-    ecs.each<Position>([&](flecs::entity e, const position&) {
-        
-        ordered.push_back(e);
-
-    });
-
+    /*
     s.run();
-
+    */
+    std::cout << x1[0] << "\n";
 }
