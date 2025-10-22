@@ -20,13 +20,15 @@ Entity types:
 #include <systems.h>
 
 
+int N = 2;//Particle Number
+
 //Position of the Left Wall
-double x_Lwall = 0;  // in cm
+double p_Lwall = 0;  // in cm
 
 // Position of the Right Wall
-double x_Rwall = 12; // in cm
+double p_Rwall = 12; // in cm
 
-struct Order {
+struct Index {
     int i; // Which particle is it
 };
 
@@ -52,14 +54,9 @@ int main() {
     std::ofstream MyFile("SHM-Data.txt");
 
     // First Particle Data
-    std::vector<double> position_1 {2}; 
-    std::vector<double> velocity_1 {2};
-    std::vector<double> acceleration_1 {0};
-
-    // Second Particle Data
-    std::vector<double> position_2 {7}; 
-    std::vector<double> velocity_2 {-1};
-    std::vector<double> acceleration_2 {0};
+    std::vector<std::vector<double>> p_matrix {{2}, {7}}; 
+    std::vector<std::vector<double>> v_matrix {{2}, {-1}};
+    std::vector<std::vector<double>> a_matrix {{0}, {0}};
 
     //Spring Constant Data
     const std::vector<double> k_list {3, 3, 3};
@@ -73,20 +70,31 @@ int main() {
         Its job is to calculate the initial acceleration and
         update the vectors and entity components. 
     */
-   
     flecs::system s = ecs.system<Particle>()
-    .each([](Particle) {
-        std::cout << "3\n";
+    .each([&](Particle, Acceleration &a, Position &p, 
+        const Mass &mass, const Index &index) {
+        if (index.i == 0) {
+            a.x = - (k_list[index.i]/mass.M) * (p.x - p_Lwall - l_list[index.i])
+                + (k_list[index.i+1]/mass.M) * (p_matrix[index.i+1][0] - p.x - l_list[index.i+1]);
+        } else if (index.i == N-1) {
+            a.x = - (k_list[index.i]/mass.M) * (p.x - p_matrix[index.i-1][0] - l_list[index.i])
+                + (k_list[index.i+1]/mass.M) * (p_Rwall - p.x - l_list[index.i+1]);
+        } else {
+            a.x = - (k_list[index.i]/mass.M) * (p.x - p_matrix[index.i-1][0] - l_list[index.i])
+                + (k_list[index.i+1]/mass.M) * (p_matrix[index.i+1][0] - p.x - l_list[index.i+1]);
+        }
+        a_matrix[index.i].push_back(a.x);
+        
     });
 
     // Create Entities
     ecs.entity("mass 1")
         // Finds and sets components
-        .set<Order>({1})
+        .set<Index>({0})
         .set<Mass>({4})
-        .set<Position>({position_1[0]})
-        .set<Velocity>({velocity_1[0]})
-        .set<Acceleration>({acceleration_1[0]})
+        .set<Position>({p_matrix[0][0]})
+        .set<Velocity>({v_matrix[0][0]})
+        .set<Acceleration>({0})
         
         // Adds a Particle Tag
         .add<Particle>();
@@ -94,14 +102,16 @@ int main() {
     
     ecs.entity("mass 2")
         // Finds and sets components
-        .set<Order>({1})
+        .set<Index>({1})
         .set<Mass>({4})
-        .set<Position>({position_2[0]})
-        .set<Velocity>({velocity_2[0]})
-        .set<Acceleration>({acceleration_2[0]})
+        .set<Position>({p_matrix[1][0]})
+        .set<Velocity>({v_matrix[1][0]})
+        .set<Acceleration>({0})
         
         // Adds a Particle Tag
         .add<Particle>();
     
     s.run();
+
+    std::cout << a_matrix[1][0];
 }
