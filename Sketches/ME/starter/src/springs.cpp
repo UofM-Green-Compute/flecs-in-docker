@@ -10,162 +10,98 @@ Than the program iterates to update the position, velocity,
 and acceleration of each entity for which that is relevant.
 
 Entity types:
-Spring_Ball: /\/\/\/\/\/O
-Spring_Wall: /\/\/\/\/\/|
-Wall:        |
-
-Example setup: Wall - Spring_Ball - Spring_Ball - Spring_Wall
-     - |/\/\/\/\/\/O/\/\/\/\/\/O/\/\/\/\/\/|
+ - Particle
 */
+
 #include <iostream>
 #include <fstream> 
 #include <vector>
 #include <flecs.h>
 #include <systems.h>
 
+
 //Position of the Left Wall
-std::vector<double> x_Lwall = {0, 0};  // in cm
-
-//Initial Position of the first mass
-std::vector<double> x1 = {5, 5}; // in cm
-
-// Initial Position of the second mass
-std::vector<double> x2 = {7, 7}; // in cm   
+double x_Lwall = 0;  // in cm
 
 // Position of the Right Wall
-std::vector<double> x_Rwall = {12, 12}; // in cm
+double x_Rwall = 12; // in cm
 
-//Spring Constant of the first spring
-double k1 = 3; // in N cm-1
-
-// Spring Constant of the second spring
-double k2 = 3; // in N cm-1
-
-// Spring Constant of the third spring
-double k3 = 3; // in N cm-1
-
-// Natural Length of the first spring
-double l1 = 4; // in N cm-1
-
-// Natural Length of the second spring
-double l2 = 4; // in N cm-1
-
-// Natural Length of the third spring
-double l3 = 4; // in N cm-1
-
+struct Order {
+    int i; // Which particle is it
+};
 
 struct Position { 
-    std::vector<double> &x_middle; // In cm
-};
-
-struct Position_Left { 
-    std::vector<double> &x_left; // In cm
-};
-
-struct Position_Right { 
-    std::vector<double> &x_right; // In cm
+    double x; // In cm
 };
 
 struct Velocity { 
-    double v; // In cms-1
+    double x;// In cms-1
 };
 
 struct Acceleration{
-    double a; // in cms-2
+    double x; // in cms-2
 };
 
 struct Mass{
-    const double m; // in kg
+    double M; // in kg
 };
 
-struct Spring_Constant{
-    const double k; // in Ncm-1
-};
-
-struct Spring_Constant_Right{
-    const double k; // in Ncm-1
-                    // Spring constant of the spring to
-                    // the right of the mass
-};
-
-struct Natural_Length{
-    const double l; // Spring's natural length in cm
-};
-
-struct Natural_Length_Right{
-    const double l; // Spring's natural length in cm
-};
-
-struct Spring_Ball{ }; // creates a Spring_Ball tag
-
-struct Spring_Wall{ }; // creates a Spring Wall tag
-
-struct Wall{ }; // creates a Wall tag
+struct Particle{ }; // creates a  tag
 
 int main() {
     std::ofstream MyFile("SHM-Data.txt");
-    std::vector<double> testing_pos; 
-    std::vector<double> testing_vel;
-    std::vector<double> testing_acc;
+
+    // First Particle Data
+    std::vector<double> position_1 {2}; 
+    std::vector<double> velocity_1 {2};
+    std::vector<double> acceleration_1 {0};
+
+    // Second Particle Data
+    std::vector<double> position_2 {7}; 
+    std::vector<double> velocity_2 {-1};
+    std::vector<double> acceleration_2 {0};
+
+    //Spring Constant Data
+    const std::vector<double> k_list {3, 3, 3};
+    // Natural Spring Length Data
+    const std::vector<double> l_list {4, 4, 4};
 
     flecs::world ecs;
+    
     /*
-    // System s runs for any entity with the tag Spring_Ball
-    flecs::system s = ecs.system<Spring_Ball>() 
-        .each([](flecs::entity e, const Mass& mass, Position& x1, 
-            Velocity& v,Acceleration& a, Spring_Constant& k1,
-            Natural_Length& l) {
-
-            std::cout << e.name() << "\n";
-            
-        });
+        System s1 runs for any entity with the tag Particle
+        Its job is to calculate the initial acceleration and
+        update the vectors and entity components. 
     */
+   
+    flecs::system s = ecs.system<Particle>()
+    .each([](Particle) {
+        std::cout << "3\n";
+    });
 
     // Create Entities
-    ecs.entity("Left Wall")
-        // Finds and sets components
-        .set<Position>({x_Lwall})
-
-        // Adds Particle Tag
-        .add<Wall>();
-    
     ecs.entity("mass 1")
         // Finds and sets components
+        .set<Order>({1})
         .set<Mass>({4})
-        .set<Position_Left>({x_Lwall})
-        .set<Position>({x1})
-        .set<Position_right>
-        .set<Velocity>({3})
-        .set<Acceleration>({0})
-        .set<Spring_Constant>({3})
-        .set<Natural_Length>({4})
+        .set<Position>({position_1[0]})
+        .set<Velocity>({velocity_1[0]})
+        .set<Acceleration>({acceleration_1[0]})
         
         // Adds a Particle Tag
-        .add<Spring_Ball>();
-
+        .add<Particle>();
+        
+    
     ecs.entity("mass 2")
         // Finds and sets components
+        .set<Order>({1})
         .set<Mass>({4})
-        .set<Position>({x2})
-        .set<Position_Left>({x1})
-        .set<Velocity>({0})
-        .set<Acceleration>({0})
-        .set<Spring_Constant>({3})
-        .set<Natural_Length>({4})
+        .set<Position>({position_2[0]})
+        .set<Velocity>({velocity_2[0]})
+        .set<Acceleration>({acceleration_2[0]})
         
         // Adds a Particle Tag
-        .add<Spring_Ball>();
+        .add<Particle>();
     
-    ecs.entity("Right Wall")
-        // Finds and sets components
-        .set<Position>({x_Rwall})
-        .set<Spring_Constant>({3})
-        .set<Natural_Length>({4})
-        
-        // Adds a Particle Tag
-        .add<Spring_Wall>();
-    /*
     s.run();
-    */
-    std::cout << x1[0] << "\n";
 }
