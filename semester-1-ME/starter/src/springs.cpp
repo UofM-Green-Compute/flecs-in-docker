@@ -4,6 +4,11 @@ This code runs a simulation of N coupled oscillators.
 Each mass has equations of motion depending on the properties
 the springs it is connected to. 
 
+First the acceleration of each particle is computed.
+
+Than the program iterates to update the position, velocity, 
+and acceleration of each entity for which that is relevant.
+
 Entity types:
 Spring_Ball: /\/\/\/\/\/O
 Spring_Wall: /\/\/\/\/\/|
@@ -18,29 +23,76 @@ Example setup: Wall - Spring_Ball - Spring_Ball - Spring_Wall
 #include <flecs.h>
 #include <systems.h>
 
+//Position of the Left Wall
+const std::vector<double> x_Lwall = {0, 0};  // in cm
+
+//Initial Position of the first mass
+std::vector<double> x1 = {5, 5}; // in cm
+
+// Initial Position of the second mass
+std::vector<double> x2 = {7, 7}; // in cm   
+
+// Position of the Right Wall
+const std::vector<double> x_Rwall = {12, 12}; // in cm
+
+//Spring Constant of the first spring
+double k1 = 3; // in N cm-1
+
+// Spring Constant of the second spring
+double k2 = 3; // in N cm-1
+
+// Spring Constant of the third spring
+double k3 = 3; // in N cm-1
+
+// Natural Length of the first spring
+double l1 = 4; // in N cm-1
+
+// Natural Length of the second spring
+double l1 = 4; // in N cm-1
+
+// Natural Length of the third spring
+double l1 = 4; // in N cm-1
 
 struct Position { 
-    double x; // In cm
+    std::vector<double> x_before, x_after; // In cm
+};
+
+struct Position_Left { 
+    std::vector<double> x_before, x_after; // In cm
+};
+
+struct Position_Right { 
+    std::vector<double> x_before, x_after; // In cm
 };
 
 struct Velocity { 
-    double x; // In cms-1
+    double v; // In cms-1
 };
 
 struct Acceleration{
-    double x; // in cms-2
+    double a; // in cms-2
 };
 
 struct Mass{
-    double m; // in kg
+    const double m; // in kg
 };
 
 struct Spring_Constant{
-    double k; // in Ncm-1
+    const double k; // in Ncm-1
+};
+
+struct Spring_Constant_Right{
+    const double k; // in Ncm-1
+                    // Spring constant of the spring to
+                    // the right of the mass
 };
 
 struct Natural_Length{
-    double l; // Spring's natural length in cm
+    const double l; // Spring's natural length in cm
+};
+
+struct Natural_Length_Right{
+    const double l; // Spring's natural length in cm
 };
 
 struct Spring_Ball{ }; // creates a Spring_Ball tag
@@ -57,9 +109,13 @@ int main() {
 
     flecs::world ecs;
 
-    flecs::system s = ecs.system<Velocity>() 
-        .each([](flecs::entity e) {
-
+    // System s runs for any entity with the tag Spring_Ball
+    flecs::system s = ecs.system<Spring_Ball>() 
+        .each([](flecs::entity e, const Mass& mass, Position& x1, 
+            Velocity& v,Acceleration& a, Spring_Constant& k1,
+            Natural_Length& l) {
+               
+            
             std::cout << e.name() << "\n";
             
         });
@@ -67,7 +123,7 @@ int main() {
     // Create Entities
     ecs.entity("Left Wall")
         // Finds and sets components
-        .set<Position>({0})
+        .set<Position>({&x_Lwall})
 
         // Adds Particle Tag
         .add<Wall>();
@@ -105,6 +161,13 @@ int main() {
         // Adds a Particle Tag
         .add<Spring_Wall>();
 
+    // Create an ordered list of the entities by position
+    std::vector<flecs::entity> ordered;
+    ecs.each<Position>([&](flecs::entity e, const position&) {
+        
+        ordered.push_back(e);
+
+    });
 
     s.run();
 
