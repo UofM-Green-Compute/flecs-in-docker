@@ -70,7 +70,7 @@ int main() {
         Its job is to calculate the initial acceleration and
         update the vectors and entity components. 
     */
-    flecs::system s = ecs.system<Particle>()
+    flecs::system s = ecs.system<Particle, Acceleration, Position, Mass, Index>()
     .each([&](Particle, Acceleration &a, Position &p, 
         const Mass &mass, const Index &index) {
         if (index.i == 0) {
@@ -83,7 +83,8 @@ int main() {
             a.x = - (k_list[index.i]/mass.M) * (p.x - p_matrix[index.i-1][0] - l_list[index.i])
                 + (k_list[index.i+1]/mass.M) * (p_matrix[index.i+1][0] - p.x - l_list[index.i+1]);
         }
-        a_matrix[index.i].push_back(a.x);
+        
+        a_matrix[index.i][0] = a.x;
         
     });
 
@@ -113,5 +114,5 @@ int main() {
     
     s.run();
 
-    std::cout << a_matrix[1][0];
+    std::cout << a_matrix[0][0] << "\n";
 }
