@@ -1,5 +1,11 @@
 /*
-This code models a one dimensional simple or damped hamonic oscillator. 
+This code models a system of N (=2) coupled oscillators. 
+
+Structure of the code
+- 
+- 
+- 
+
 Aims: 
 - Produce graphs
 - Animate simulations
@@ -16,16 +22,17 @@ Aims:
 double k = 2; // Spring Constant in Nm-1
 double b = 0; // Damping coefficient in s-1
 
-double x1 = 0; // Entity 1 initial position
-double v1 = 2; // Entity 1 initial velocity
-double m1 = 3; // Entity 1 initial mass
-double a1 = - (k*x1)/m1 - b * v1; // Entity 1 initial acceleration
+std::vector<double> x_init = {0,0}; // Entity 1 initial position
+std::vector<double> v_init = {2,1}; // Entity 1 initial velocity
+std::vector<double> m_init = {3,5}; // Entity 1 initial mass
+double acceleration(int index) { return -(k*x_init[index])/m_init[index] - b * v_init[index]; } // Function to calculate acceleration
 
-float w1 = std::sqrt( k / m1); // Entity 1 - Frequency of the mass-spring system 
+float w1 = std::sqrt( k / m_init[0]); // Entity 1 - Frequency of the mass-spring system 
 int time_period = ( (2 * M_PI) / w1 ); // Time the spring system runs for in s 
 int time_unit = 100; 
 int run_time = time_period * time_unit; 
-int no_particles = 1; 
+
+int no_particles = 2; 
 
 struct Index {
     int i; // Which particle is it
@@ -49,6 +56,8 @@ struct Mass{
 
 int main() {
 
+    std::cout<<x_init[0]<<"AHHHHH"<<std::endl; 
+
     // Open file for writing
     std::ofstream MyFile; 
     MyFile.open("SHM-Data.txt");
@@ -57,7 +66,6 @@ int main() {
         std::cout<<"Error in creating file"<<std::endl; 
         return 1; 
     }
-    else { std::cout<<"All good"<<std::endl; }
     MyFile << run_time << std::endl;
 
     // Define vectors to store component data
@@ -92,12 +100,13 @@ int main() {
 
     for(int i = 0; i < no_particles; i++)
     {
-        flecs::entity particle_1 = ecs.entity().is_a(Particle); 
-        particle_1.set(Index{i});
-        particle_1.set(Position{x1});
-        particle_1.set(Velocity{v1});
-        particle_1.set(Acceleration{a1});
-        particle_1.set(Mass{m1});
+        flecs::entity particle = ecs.entity().is_a(Particle); 
+        particle.set(Index{i});
+        particle.set(Position{x_init[i]});
+        particle.set(Velocity{v_init[i]});
+        particle.set(Acceleration{acceleration(i)});
+        particle.set(Mass{m_init[i]});
+
     }
     
     // Run the system
