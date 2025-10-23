@@ -11,7 +11,7 @@ endif
 SRC := $(BWD)/src
 INC := $(BWD)/include
 OBJ := $(BWD)/bin
-RUNDIR := $(BWD)/bin
+RUNDIR := $(BWD)/outputs
 
 # --- toolchain & flags -------------------------------------------------------
 CXX      ?= g++
