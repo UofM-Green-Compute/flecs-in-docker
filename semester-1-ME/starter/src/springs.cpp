@@ -142,7 +142,7 @@ int main() {
     s1.run();
 
     MyFile << "Time (s), Position 1 (cm), Velocity 1 (cm s-1), Acceleration 1 (cm s-2)" 
-           << "Position 2 (cm), Velocity 2 (cm s-1), Acceleration 2 (cm s-2)" << std::endl; 
+           << ", Position 2 (cm), Velocity 2 (cm s-1), Acceleration 2 (cm s-2)" << std::endl; 
     MyFile << 0 << ", " << p_matrix[0][0] << ", " << v_matrix[0][0] << "," << a_matrix[0][0] << "," 
            << p_matrix[1][0] << ", " << v_matrix[1][0] << "," << a_matrix[1][0] << std::endl; 
 
