@@ -1,4 +1,5 @@
-/*
+/* DO NOT BUILD USING VSCODE !!!!!!!!!! Build in terminal
+
 This code models a system of N (=2) coupled oscillators. 
 
 Structure of the code
@@ -9,8 +10,8 @@ Structure of the code
 Aims: 
 - Produce graphs
 - Animate simulations
+
 */
-// DO NOT BUILD USING VSCODE !!!!!!!!!!
 
 #include <iostream>
 #include <fstream> 
@@ -19,16 +20,9 @@ Aims:
 #include <flecs.h>
 #include <systems.h>
 
-double k = 2; // Spring Constant in Nm-1
-double b = 0; // Damping coefficient in s-1
-
-// Define vectors to store component data
-    std::vector<double> pos; 
-    std::vector<double> vel;
-    std::vector<double> acc;
-
+double k_freq_calc = 3; 
 double particle_mass = 5; 
-float w1 = std::sqrt( k / particle_mass); // Frequency of the mass-spring system 
+float w1 = std::sqrt( k_freq_calc / particle_mass); // Frequency of the mass-spring system 
 int time_period = ( (2 * M_PI) / w1 ); // Time the spring system runs for in s 
 float time_step = 0.01; // Time elapsed in each time step 
 int run_time = time_period * 1/time_step; // Number of loops to run 
@@ -57,9 +51,11 @@ struct Mass{
     double M; // in kg
 };
 
-double acceleration(float position, float position_left, float position_right,
-const float mass, float k_left, float k_right, float l_left, float l_right){
+struct Particle {}; 
 
+double acceleration(float position, float position_left, float position_right,
+const float mass, float k_left, float k_right, float l_left, float l_right)
+{
     float acc;
     acc = - (k_left/mass) * (position - position_left - l_left) 
         + (k_right/mass) * (position_right - position - l_right);
@@ -132,22 +128,35 @@ int main() {
     });
 
     // Particle prefab, a template that we can use to generate entities
-    flecs::entity Particle = ecs.prefab("Particle")
+    ecs.prefab<Particle>()
         .set<Index>({})
+        .set<Mass>({})
         .set<Position>({})
         .set<Velocity>({})
-        .set<Acceleration>({})
-        .set<Mass>({});
+        .set<Acceleration>({});
 
-    for(int i = 0; i < N; i++)
-    {
-        flecs::entity particle = ecs.entity().is_a(Particle); 
-        particle.set(Index{i});
-        particle.set(Position{p_matrix[0][0]});
-        particle.set(Velocity{v_matrix[0][0]});
-        particle.set(Acceleration{0}); 
-        particle.set(Mass{particle_mass});
-    }
+    flecs::entity particle0 = ecs.entity().is_a<Particle>()
+        .set<Index>({0})
+        .set<Mass>({4})
+        .set<Position>({p_matrix[0][0]})
+        .set<Velocity>({v_matrix[0][0]});
+
+    flecs::entity particle1 = ecs.entity().is_a<Particle>()
+        .set<Index>({1})
+        .set<Mass>({4})
+        .set<Position>({p_matrix[1][0]})
+        .set<Velocity>({v_matrix[1][0]});
+
+    // *** This loop wasn't working as expected. Led to incorrect data beign written in file
+    // for(int i = 0; i < N; i++)
+    // {
+    //     flecs::entity particle = ecs.entity().is_a(Particle); 
+    //     particle.set(Index{i});
+    //     particle.set(Position{p_matrix[0][0]});
+    //     particle.set(Velocity{v_matrix[0][0]});
+    //     particle.set(Acceleration{0}); 
+    //     particle.set(Mass{particle_mass});
+    // }
 
     s1.run();
 
