@@ -61,15 +61,15 @@ const float mass, float k_left, float k_right, float l_left, float l_right)
 int main() {
 
     // Open file for writing
-    std::ofstream File; 
-    File.open("Coupled_Oscillators.txt");
-    if (!File.is_open())
+    std::ofstream MyFile; 
+    MyFile.open("Coupled_Oscillators.txt");
+    if (!MyFile.is_open())
     {
         std::cout<<"Error in creating file"<<std::endl; 
         return 1; 
     }
-    File << "No iterations: " << run_time << std::endl;
-    File << "Time (s), Position 1 (cm), Velocity 1 (cm s-1), Acceleration 1 (cm s-2)" 
+    MyFile << "No iterations: " << run_time << std::endl;
+    MyFile << "Time (s), Position 1 (cm), Velocity 1 (cm s-1), Acceleration 1 (cm s-2)" 
            << ", Position 2 (cm), Velocity 2 (cm s-1), Acceleration 2 (cm s-2)" << std::endl;
 
     // First Particle Data
@@ -163,9 +163,9 @@ int main() {
     }
     for(int i = 0; i < run_time; i++) 
     {
-        File << i*time_step << ", " << p_matrix[0][i] << ", " << v_matrix[0][i] << "," << a_matrix[0][i] << "," 
+        MyFile << i*time_step << ", " << p_matrix[0][i] << ", " << v_matrix[0][i] << "," << a_matrix[0][i] << "," 
                << p_matrix[1][i] << ", " << v_matrix[1][i] << "," << a_matrix[1][i] << std::endl; 
     }
-    File.close();
+    MyFile.close();
     
 }
