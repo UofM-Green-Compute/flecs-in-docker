@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import PillowWriter
 from matplotlib.animation import FuncAnimation 
+import os
 
 # Open data file
 file = open("/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/starter/outputs/Coupled_Oscillator_OD_Sketch.txt")
