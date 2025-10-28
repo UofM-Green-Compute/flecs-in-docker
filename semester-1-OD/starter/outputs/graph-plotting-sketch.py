@@ -4,7 +4,7 @@ from matplotlib.animation import PillowWriter
 from matplotlib.animation import FuncAnimation 
 
 # Open data file
-file = open("/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/starter/outputs/Coupled_Oscillators.txt")
+file = open("/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/starter/outputs/Coupled_Oscillator_OD_Sketch.txt")
 
 # Define number of data points variable, arrays to store components
 no_points = 0
@@ -66,30 +66,43 @@ ax_ani.set_ylim(-1,1)
 fig.tight_layout()
 
 # Animation
-graph0, = ax_pos.plot([],[],label="Position")
-graph1, = ax_vel.plot([],[],color="Orange",label="Velocity")
-graph2, = ax_acc.plot([],[],color="Red",label="Velocity")
-graph3, = ax_ani.plot(0,0,'o',color="Red")
-graph4, = ax_ani.plot(0,0,'o',color="Blue")
+#   Position graphs
+graph0, = ax_pos.plot([],[],color = 'blue',label="Particle 1")
+graph0b, = ax_pos.plot([],[],color = 'blue',label="Particle 2",linestyle='--')
+#   Velocity graphs
+graph1, = ax_vel.plot([],[],color="Orange")
+graph1b, = ax_vel.plot([],[],color="Orange",linestyle='--')
+#   Acceleration graphs
+graph2, = ax_acc.plot([],[],color="Red")
+graph2b, = ax_acc.plot([],[],color="Red",linestyle='--')
+#   Anmation graphs
+graph3, = ax_ani.plot(0,0,'o',color="Red",label = 'Particle 1')
+graph3b, = ax_ani.plot(0,0,'s',color="Blue",label = 'Particle 1')
 
 for ax in fig.get_axes():
    ax.label_outer()  
 
+# Make 2 legends
+fig.legend([graph0, graph0b], ['Particle 1', 'Partcile 2'],
+          loc='upper left', frameon=False)
+fig.legend([graph3, graph3b], ['Particle 1', 'Partcile 2'],
+          loc='upper right', frameon=False)
+
 def all_positions(frame):
-    for p in positions:
-        line = ax_pos.plot(time[:frame+1],p[:frame+1],color='blue',label="Position")  
+    graph0.set_data(time[:frame],pos0[:frame])
+    graph0b.set_data(time[:frame],pos2[:frame])  
 
 def all_velocities(frame):
-    for v in velocities:
-        line = ax_vel.plot(time[:frame+1],v[:frame+1],color='orange',label="Velocity") 
+    graph1.set_data(time[:frame],vel0[:frame])
+    graph1b.set_data(time[:frame],vel2[:frame]) 
 
 def all_accelerations(frame):
-    for a in accelerations:
-        line = ax_acc.plot(time[:frame+1],a[:frame+1],color='red',label="Acceleration")  
+    graph2.set_data(time[:frame],acc0[:frame])
+    graph2b.set_data(time[:frame],acc2[:frame])   
 
 def particle(frame):
     graph3.set_data([pos0[frame]],zeroes[frame])
-    graph4.set_data([pos2[frame]],zeroes[frame])
+    graph3b.set_data([pos2[frame]],zeroes[frame])
 
 ani = FuncAnimation(fig, all_positions, frames=len(time), interval=10)
 ani1 = FuncAnimation(fig, all_velocities, frames=len(time), interval=10)

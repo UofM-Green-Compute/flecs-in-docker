@@ -2,11 +2,6 @@
 
 This code models a system of N (=2) coupled oscillators. 
 
-Structure of the code
-- 
-- 
-- 
-
 Aims: 
 - Produce graphs
 - Animate simulations
@@ -67,7 +62,7 @@ int main() {
 
     // Open file for writing
     std::ofstream MyFile; 
-    MyFile.open("Coupled_Oscillators.txt");
+    MyFile.open("Coupled_Oscillator_OD_Sketch.txt");
     if (!MyFile.is_open())
     {
         std::cout<<"Error in creating file"<<std::endl; 
