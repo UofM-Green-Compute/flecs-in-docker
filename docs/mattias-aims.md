@@ -38,7 +38,20 @@ Making something which is useful for an actual researcher to useful
 [] Start Fluid Dynamics Literature Review
 [] Begin Fluid Dynamics Physics refresh and corresponding code sketch
 
+## First Aims
+[x] Produce a working starter project
+[] Figure Out which CFD method to use
+  - Finite Difference Method
+[] Produce a fluid simulation using that method
+[] Extract Results
+  - eg laminar-turbulent transition
+[] Compare with literature
 
+## Mature
+[] Produce a fluid simulation using other methods and compare
+[] Carbon Cost Tracking
+
+## Deadlines
 ## Week 8
 [] Submit Optional Draft Report Outline
 

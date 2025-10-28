@@ -73,8 +73,8 @@ int main() {
            << ", Position 2 (cm), Velocity 2 (cm s-1), Acceleration 2 (cm s-2)" << std::endl;
 
     // First Particle Data
-    std::vector<std::vector<double>> p_matrix {{2}, {7}}; 
-    std::vector<std::vector<double>> v_matrix {{2}, {-1}};
+    std::vector<std::vector<double>> p_matrix {{4}, {8}}; 
+    std::vector<std::vector<double>> v_matrix {{-2}, {2}};
     std::vector<std::vector<double>> a_matrix {{0}, {0}};
 
     const std::vector<double> k_list {3, 3, 3}; // Spring Constants
