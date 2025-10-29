@@ -14,7 +14,7 @@ This means:
 * The behaviour of an entity depends on its current state
 * That state gets updated based on nearby asteroids. (in particular acceleration is updated)
 * The "nearby" asteroids is determined based on a grid, and asteroids in the current grid cell and neighbouring grid cells is taken into account.
-* Furthermore only the closed K nearest neighbours are used to determine this.
+* Furthermore only the closest K nearest neighbours are used to determine this.
 
 
 # Building, Running, Notes
@@ -33,7 +33,7 @@ Running this code results in the simulation running and being visualised using a
 If you pass in "num" this is used for "K nearest neighbours", otherwise a default of 10 is used,
 
 ::: notes :::
-Note: The tutorial code was bootstrapped using AI under **very*** tight instruction. This file walks through what the code does and why. None of the text in this document however is AI generated. (I wanted it to be correct) I've simplfied the code by doing this manually as well.
+Note: The tutorial code was *bootstrapped* using AI under **very** tight instruction. This file walks through what the code does and why. None of the text in this document however is AI generated. (I wanted it to be correct) I've simplfied the code by doing this manually as well.
 
 This should be sufficiently different from what you're seeking to do so it's project agnostic.
 But should hopefully show a pattern you can use.
