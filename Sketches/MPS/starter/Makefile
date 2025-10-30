@@ -51,6 +51,13 @@ dockerbuild: prepare
 	           buildenv \
 	           make -f $(BWD)/src/Makefile
 
+dockerpandoc: prepare
+	docker run -it --rm -u1000:1000 -e BWD=$(BWD) \
+	           $(MOUNTS) \
+	           -v $(BWD)/docs/gravity_presentation/:$(BWD)/docs/gravity_presentation/ \
+	           buildenv \
+	           make -C $(BWD)/docs/gravity_presentation/ -f $(BWD)/docs/gravity_presentation/Makefile
+
 devloop:
 	make clean
 	make prepare
