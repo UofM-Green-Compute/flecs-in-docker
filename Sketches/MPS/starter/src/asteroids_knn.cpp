@@ -225,7 +225,7 @@ int main(int argc, char* argv[]) {
     std::cout << "\x1b[2J\x1b[?25l"; // Clear the screen and hide the cursor
     Viewport vp{100, 30, 0.6};
 
-    const int STEPS = 4000;
+    const int STEPS = 1000;
     const int SLEEP_MS = 16;
 
     for (int i = 0; i < STEPS; ++i) {
