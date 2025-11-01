@@ -1,3 +1,5 @@
+#include <ccenergy/EnergyTracker.hpp>
+
 #include <flecs.h>
 #include <cmath>
 #include <iostream>
@@ -7,6 +9,25 @@
 #include <chrono>
 #include <algorithm>
 #include <utility>
+
+// Global-ish measurement state (simple and explicit)
+struct EnergyAccum {
+    double seconds{0.0};
+    double cpu_j{0.0};
+    double gpu_j{0.0};
+} g_energy;
+
+ccenergy::Config g_cfg = []{
+    ccenergy::Config c;
+    c.label = "OnUpdate";
+    c.measure_cpu = true;
+    c.measure_gpu = false;      // flip to true if you built with USE_NVML
+    c.log_to_stdout = false;    // we’ll do our own final print
+    return c;
+}();
+
+static std::unique_ptr<ccenergy::EnergyTracker> g_tracker;
+
 
 struct Position { double x, y; };
 struct Velocity { double dx, dy; };
@@ -149,6 +170,16 @@ int main(int argc, char* argv[]) {
         .kind(flecs::PreUpdate)
         .each([](Accel& a){ a.ddx = 0.0; a.ddy = 0.0; });
 
+
+world.system<>()
+    .kind(flecs::PreUpdate)
+    .each([]() {
+        // start once per frame
+        if (!g_tracker) g_tracker = std::make_unique<ccenergy::EnergyTracker>(g_cfg);
+        g_tracker->start();
+    });
+
+
     // 1) Update the accelerations - KNN gravity using only current cell + 8 neighbours
     world.system<const Position, Accel, const Mass>()
         .with<AsteroidTag>()
@@ -208,6 +239,16 @@ int main(int argc, char* argv[]) {
             }
         });
 
+world.system<>()
+    .kind(flecs::PostUpdate)
+    .each([]() {
+        if (!g_tracker) return;
+        auto r = g_tracker->stop();
+        g_energy.seconds += r.seconds;
+        g_energy.cpu_j   += r.cpu_joules;
+        g_energy.gpu_j   += r.gpu_joules;
+    });
+
     // 2) Apply the accelerations
     world.system<Position, Velocity, const Accel>()
         .with<AsteroidTag>()
@@ -238,5 +279,19 @@ int main(int argc, char* argv[]) {
         std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_MS));
     }
     std::cout << "\x1b[?25h\n";  // Show the cursor again
+
+
+{
+    const double total_j   = g_energy.cpu_j + g_energy.gpu_j;
+    const double avg_watts = (g_energy.seconds > 0) ? total_j / g_energy.seconds : 0.0;
+
+    std::cout << "\n[ccenergy-summary] label=" << g_cfg.label
+              << " frames_seconds=" << g_energy.seconds
+              << " cpu_j="  << g_energy.cpu_j
+              << " gpu_j="  << g_energy.gpu_j
+              << " total_j="<< total_j
+              << " avg_w="  << avg_watts
+              << std::endl;
+}
     return 0;
 }
