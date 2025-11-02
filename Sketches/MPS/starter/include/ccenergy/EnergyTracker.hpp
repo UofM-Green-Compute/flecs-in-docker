@@ -51,18 +51,18 @@ namespace ccenergy {
     };
 
     std::unique_ptr < Backend > make_linux_rapl_backend();
-    std::unique_ptr < Backend > make_nvml_backend();
+    std::unique_ptr < Backend > make_nvml_backend();  // TBD
 
     class EnergyTracker {
       public:
-        explicit EnergyTracker(Config init_cfg = { }) : cfg(std::move(init_cfg)) { }
+        explicit EnergyTracker(Config init_config = { }) : config(std::move(init_config)) { }
         void start();
         Result stop();
         std::string mkReport();
-        Result measure(const std::string & label, const std::function < void () > &fn, Config cfg = { });
+        Result measure(const std::string & label, const std::function < void () > &fn, Config config = { });
       private:
-        Config cfg;
-        EnergyAccum ng_energy {};
+        Config config;
+        EnergyAccum energy_counters {};
         using Clock = std::chrono::steady_clock;
         std::unique_ptr < Backend > cpu_;
         std::unique_ptr < Backend > gpu_;
@@ -78,23 +78,23 @@ namespace ccenergy {
     Result EnergyTracker::stop() {
         auto end = Clock::now();
         Result r;
-        r.label = cfg.label;
+        r.label = config.label;
         r.seconds = std::chrono::duration < double >(end - start_tp_).count();
         if (cpu_)
             r.cpu_joules = cpu_->stop_joules();
-        if (cfg.log_to_stdout)
+        if (config.log_to_stdout)
             log_result(r);
 
-        ng_energy.seconds += r.seconds;
-        ng_energy.cpu_j   += r.cpu_joules;
-        ng_energy.gpu_j   += r.gpu_joules;
+        energy_counters.seconds += r.seconds;
+        energy_counters.cpu_j   += r.cpu_joules;
+        energy_counters.gpu_j   += r.gpu_joules;
 
         return r;
     }
 
-    Result EnergyTracker::measure(const std::string & label, const std::function < void () > &fn, Config cfg) {
-        cfg.label = label;
-        EnergyTracker t(cfg);
+    Result EnergyTracker::measure(const std::string & label, const std::function < void () > &fn, Config config) {
+        config.label = label;
+        EnergyTracker t(config);
         t.start();
         fn();
         return t.stop();
@@ -105,12 +105,12 @@ namespace ccenergy {
     }
 
     std::string EnergyTracker::mkReport() {
-        const double total_j   = ng_energy.cpu_j + ng_energy.gpu_j;
-        const double avg_watts = (ng_energy.seconds > 0) ? total_j / ng_energy.seconds : 0.0;
+        const double total_joules   = energy_counters.cpu_j + energy_counters.gpu_j;
+        const double avg_watts = (energy_counters.seconds > 0) ? total_joules / energy_counters.seconds : 0.0;
 
 
-        return fmt("[ccenergy-summary] label={} frames_seconds={:.3f} cpu_j={:.3f} gpu_j={:.3f} total_j={:.3f} avg_w={:.3f}",
-                                cfg.label, ng_energy.seconds, ng_energy.cpu_j, ng_energy.gpu_j, total_j, avg_watts);
+        return fmt("[ccenergy-summary] label={} frames_seconds={:.3f} cpu_joules={:.3f} gpu_joules={:.3f} total_joules={:.3f} avg_watts={:.3f}",
+                                config.label, energy_counters.seconds, energy_counters.cpu_j, energy_counters.gpu_j, total_joules, avg_watts);
     }
 
 

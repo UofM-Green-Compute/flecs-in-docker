@@ -91,10 +91,10 @@ int main(int argc, char* argv[]) {
     flecs::world world(argc, argv); //####//
 
     // Energy tracking variables
-    ccenergy::EnergyTracker ng_tracker {{ .label = "OnUpdate",
-                                          .measure_cpu = true,
-                                          .measure_gpu  = false,
-                                          .log_to_stdout = false }};
+    ccenergy::EnergyTracker energy_tracker {{ .label = "OnUpdate",
+                                              .measure_cpu = true,
+                                              .measure_gpu  = false,
+                                              .log_to_stdout = false }};
     int K = 10;
     if (argc > 1) {
         try { K = std::max(1, std::stoi(argv[1])); }  //####//
@@ -164,7 +164,7 @@ world.system<>()
     .kind(flecs::PreUpdate)
     .each([&]() {
         // start once per frame
-        ng_tracker.start();
+        energy_tracker.start();
     });
 
 
@@ -230,7 +230,7 @@ world.system<>()
 world.system<>()
     .kind(flecs::PostUpdate)
     .each([&]() {
-        auto r = ng_tracker.stop();
+        auto r = energy_tracker.stop();
     });
 
     // 2) Apply the accelerations
@@ -264,7 +264,7 @@ world.system<>()
     }
     std::cout << "\x1b[?25h\n";  // Show the cursor again
 
-    std::cout << ng_tracker.mkReport() << std::endl;
+    std::cout << energy_tracker.mkReport() << std::endl;
 
     return 0;
 }
