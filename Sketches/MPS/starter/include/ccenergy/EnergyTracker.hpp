@@ -1,3 +1,56 @@
+//
+// (c) 2025 Michael Sparks, University of Manchester
+// You may use this under the terms of the Apache 2 License
+//
+//
+// This file implements minimal and basic energy tracking.  Its API is
+// loosely inspired by (but doesn't take code from) CodeCarbon (Hence the
+// name "ccenergy") There are placeholders for some necessary, but
+// un-implemented extras.
+// 
+// For now it accesses RAPL via /sys/class/powercap on modern linux systems.
+//
+// It's loosely inspired in that:
+//
+// * You create a tracker
+// * As many times as you like:
+//   * You start it
+//   * You stop it
+// * You report the results.
+// Creation:
+//
+//     ccenergy::EnergyTracker energy_tracker {{ .label = "OnUpdate",
+//                                               .measure_cpu = true,
+//                                               .measure_gpu  = false,
+//                                               .log_to_stdout = false }};
+//
+// Starting:
+//
+//             energy_tracker.start();
+//
+// Stopping:
+//
+//             auto r = energy_tracker.stop();
+//
+// Reporting:
+//
+//     std::cout << energy_tracker.mkReport() << std::endl;
+//
+// It doesn't implement the NVML style carbon accounting as yet.
+//
+// It relies on RAPL and therefore has the same limitations as RAPL in general.
+// If you are using this for benchmarking, you need your software to be the
+// dominant piece of code running on that machine when performing measurements.
+//
+// Things that are really needed:
+//
+// * Minimally sufficient docs - including limitations.
+// * Minimally sufficient reproducible testing (manual acceptance testing is all well and
+//   good, but unit tests are better).
+// * Ideally a mechanism to seperate out quiesscent power usage from high level (if possible)
+// * GPU power tracking. (via NVML or similar)
+//
+
 #pragma once
 #include <string>
 #include <chrono>
