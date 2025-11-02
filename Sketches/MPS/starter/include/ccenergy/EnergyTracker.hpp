@@ -16,12 +16,9 @@ namespace fs = std::filesystem;
 namespace ccenergy {
     struct Result {
         std::string label;
-        double seconds {
-        0.0};
-        double cpu_joules {
-        0.0};
-        double gpu_joules {
-        0.0};
+        double seconds {0.0};
+        double cpu_joules {0.0};
+        double gpu_joules {0.0};
         double total_joules() const {
             return cpu_joules + gpu_joules;
         }
@@ -31,14 +28,10 @@ namespace ccenergy {
     };
 
     struct Config {
-        std::string label {
-        "session"};
-        bool measure_cpu {
-        true};
-        bool measure_gpu {
-        false};
-        bool log_to_stdout {
-        true};
+        std::string label {"session"};
+        bool measure_cpu {true};
+        bool measure_gpu {false};
+        bool log_to_stdout {true};
     };
 
     class Backend {
@@ -82,6 +75,7 @@ namespace ccenergy {
             log_result(r);
         return r;
     }
+
     Result EnergyTracker::measure(const std::string & label, const std::function < void () > &fn, Config cfg) {
         cfg.label = label;
         EnergyTracker t(cfg);
@@ -93,6 +87,7 @@ namespace ccenergy {
         printf("[ccenergy] %-10s time %.3fs CPU %.3fJ total %.3fJ avg %.3fW\n",
                r.label.c_str(), r.seconds, r.cpu_joules, r.total_joules(), r.avg_power_watts());
     }
+
     class LinuxRAPLBackend:public Backend {
       public:
         void start() override;
@@ -106,11 +101,11 @@ namespace ccenergy {
             uint64_t max_uj {
             0};
         };
-          std::vector < Domain > domains_;
+        std::vector < Domain > domains_;
         static std::vector < Domain > discover_domains();
         static bool read_uint64(const std::string &, uint64_t &);
     };
-      std::unique_ptr < Backend > make_linux_rapl_backend();
+    std::unique_ptr < Backend > make_linux_rapl_backend();
 
     bool LinuxRAPLBackend::read_uint64(const std::string & p, uint64_t & o) {
         std::ifstream f(p);
