@@ -90,7 +90,7 @@ static void render_ascii(const Viewport& vp, const std::vector<flecs::entity>& a
 int main(int argc, char* argv[]) {
     flecs::world world(argc, argv);
 
-    // Energy tracking variables
+    // Create the energy tracker
     ccenergy::EnergyTracker energy_tracker {{ .label = "OnUpdate",
                                               .measure_cpu = true,
                                               .measure_gpu  = false,
@@ -159,13 +159,13 @@ int main(int argc, char* argv[]) {
         .kind(flecs::PreUpdate)
         .each([](Accel& a){ a.ddx = 0.0; a.ddy = 0.0; });
 
-
-world.system<>()
-    .kind(flecs::PreUpdate)
-    .each([&]() {
-        // start once per frame
-        energy_tracker.start();
-    });
+    // Start the energy tracker just before the simulation code starts
+    world.system<>()
+        .kind(flecs::PreUpdate)
+        .each([&]() {
+            // start once per frame
+            energy_tracker.start();
+        });
 
 
     // 1) Update the accelerations - KNN gravity using only current cell + 8 neighbours
@@ -227,11 +227,13 @@ world.system<>()
             }
         });
 
-world.system<>()
-    .kind(flecs::PostUpdate)
-    .each([&]() {
-        auto r = energy_tracker.stop();
-    });
+    // Stop the energy tracker just after the simulation code stops
+    // We do it this way to enable the systems being monitored to be changed without needing to be changed.
+    world.system<>()
+        .kind(flecs::PostUpdate)
+        .each([&]() {
+            auto r = energy_tracker.stop();
+        });
 
     // 2) Apply the accelerations
     world.system<Position, Velocity, const Accel>()
@@ -264,6 +266,7 @@ world.system<>()
     }
     std::cout << "\x1b[?25h\n";  // Show the cursor again
 
+    // Reporting the information from the energy tracker
     std::cout << energy_tracker.mkReport() << std::endl;
 
     return 0;
