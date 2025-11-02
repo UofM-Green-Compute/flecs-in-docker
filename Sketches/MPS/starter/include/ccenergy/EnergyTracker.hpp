@@ -11,9 +11,18 @@
 #include <fstream>
 #include <filesystem>
 
+#include <futureprint.hpp>
+
 namespace fs = std::filesystem;
 
 namespace ccenergy {
+    // Structure for capturing and updating stats (costs) relating to a tracker.
+    struct EnergyAccum {
+        double seconds{0.0};
+        double cpu_j{0.0};
+        double gpu_j{0.0};
+    };
+
     struct Result {
         std::string label;
         double seconds {0.0};
@@ -46,13 +55,15 @@ namespace ccenergy {
 
     class EnergyTracker {
       public:
-        explicit EnergyTracker(Config cfg = { }):cfg_(std::move(cfg)) { }
+        explicit EnergyTracker(Config init_cfg = { }) : cfg(std::move(init_cfg)) { }
         void start();
         Result stop();
-        static Result measure(const std::string & label, const std::function < void () > &fn, Config cfg = { });
+        std::string mkReport();
+        Result measure(const std::string & label, const std::function < void () > &fn, Config cfg = { });
       private:
+        Config cfg;
+        EnergyAccum ng_energy {};
         using Clock = std::chrono::steady_clock;
-        Config cfg_;
         std::unique_ptr < Backend > cpu_;
         std::unique_ptr < Backend > gpu_;
         Clock::time_point start_tp_;
@@ -67,12 +78,17 @@ namespace ccenergy {
     Result EnergyTracker::stop() {
         auto end = Clock::now();
         Result r;
-        r.label = cfg_.label;
+        r.label = cfg.label;
         r.seconds = std::chrono::duration < double >(end - start_tp_).count();
         if (cpu_)
             r.cpu_joules = cpu_->stop_joules();
-        if (cfg_.log_to_stdout)
+        if (cfg.log_to_stdout)
             log_result(r);
+
+        ng_energy.seconds += r.seconds;
+        ng_energy.cpu_j   += r.cpu_joules;
+        ng_energy.gpu_j   += r.gpu_joules;
+
         return r;
     }
 
@@ -87,6 +103,16 @@ namespace ccenergy {
         printf("[ccenergy] %-10s time %.3fs CPU %.3fJ total %.3fJ avg %.3fW\n",
                r.label.c_str(), r.seconds, r.cpu_joules, r.total_joules(), r.avg_power_watts());
     }
+
+    std::string EnergyTracker::mkReport() {
+        const double total_j   = ng_energy.cpu_j + ng_energy.gpu_j;
+        const double avg_watts = (ng_energy.seconds > 0) ? total_j / ng_energy.seconds : 0.0;
+
+
+        return fmt("[ccenergy-summary] label={} frames_seconds={:.3f} cpu_j={:.3f} gpu_j={:.3f} total_j={:.3f} avg_w={:.3f}",
+                                cfg.label, ng_energy.seconds, ng_energy.cpu_j, ng_energy.gpu_j, total_j, avg_watts);
+    }
+
 
     class LinuxRAPLBackend:public Backend {
       public:
