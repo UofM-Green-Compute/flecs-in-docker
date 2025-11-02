@@ -17,14 +17,11 @@ struct EnergyAccum {
     double gpu_j{0.0};
 } g_energy;
 
-ccenergy::Config g_cfg = []{
-    ccenergy::Config c;
-    c.label = "OnUpdate";
-    c.measure_cpu = true;
-    c.measure_gpu = false;      // flip to true if you built with USE_NVML
-    c.log_to_stdout = false;    // we’ll do our own final print
-    return c;
-}();
+
+ccenergy::Config g_cfg { .label = "OnUpdate",
+                         .measure_cpu = true,
+                         .measure_gpu  = false,
+                         .log_to_stdout = false };
 
 static std::unique_ptr<ccenergy::EnergyTracker> g_tracker;
 
