@@ -73,8 +73,10 @@ static inline std::pair<int,int> pos_to_cell(const Position& p) {
     int cy = int(std::floor(ny * GY));
 
     // Robust wrap for edge cases where p==+W or +H after rounding
-    if (cx < 0) cx += GX; if (cx >= GX) cx -= GX;
-    if (cy < 0) cy += GY; if (cy >= GY) cy -= GY;
+    if (cx < 0) cx += GX;
+    if (cx >= GX) cx -= GX;
+    if (cy < 0) cy += GY;
+    if (cy >= GY) cy -= GY;
     return {cx, cy};
 }
 
@@ -102,6 +104,7 @@ static void render_ascii(const Viewport& vp, const std::vector<flecs::entity>& a
     for (auto& row : buf) std::cout << row << "\n";    // Print out the rows
     std::cout.flush();
 }
+
 
 int main(int argc, char* argv[]) {
     flecs::world world(argc, argv); //####//
