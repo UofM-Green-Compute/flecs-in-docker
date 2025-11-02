@@ -10,22 +10,6 @@
 #include <algorithm>
 #include <utility>
 
-// Global-ish measurement state (simple and explicit)
-struct EnergyAccum {
-    double seconds{0.0};
-    double cpu_j{0.0};
-    double gpu_j{0.0};
-} g_energy;
-
-
-ccenergy::Config g_cfg { .label = "OnUpdate",
-                         .measure_cpu = true,
-                         .measure_gpu  = false,
-                         .log_to_stdout = false };
-
-static std::unique_ptr<ccenergy::EnergyTracker> g_tracker;
-
-
 struct Position { double x, y; };
 struct Velocity { double dx, dy; };
 struct Accel    { double ddx, ddy; };
@@ -106,6 +90,11 @@ static void render_ascii(const Viewport& vp, const std::vector<flecs::entity>& a
 int main(int argc, char* argv[]) {
     flecs::world world(argc, argv); //####//
 
+    // Energy tracking variables
+    ccenergy::EnergyTracker ng_tracker {{ .label = "OnUpdate",
+                                          .measure_cpu = true,
+                                          .measure_gpu  = false,
+                                          .log_to_stdout = false }};
     int K = 10;
     if (argc > 1) {
         try { K = std::max(1, std::stoi(argv[1])); }  //####//
@@ -173,10 +162,9 @@ int main(int argc, char* argv[]) {
 
 world.system<>()
     .kind(flecs::PreUpdate)
-    .each([]() {
+    .each([&]() {
         // start once per frame
-        if (!g_tracker) g_tracker = std::make_unique<ccenergy::EnergyTracker>(g_cfg);
-        g_tracker->start();
+        ng_tracker.start();
     });
 
 
@@ -241,12 +229,8 @@ world.system<>()
 
 world.system<>()
     .kind(flecs::PostUpdate)
-    .each([]() {
-        if (!g_tracker) return;
-        auto r = g_tracker->stop();
-        g_energy.seconds += r.seconds;
-        g_energy.cpu_j   += r.cpu_joules;
-        g_energy.gpu_j   += r.gpu_joules;
+    .each([&]() {
+        auto r = ng_tracker.stop();
     });
 
     // 2) Apply the accelerations
@@ -280,18 +264,7 @@ world.system<>()
     }
     std::cout << "\x1b[?25h\n";  // Show the cursor again
 
+    std::cout << ng_tracker.mkReport() << std::endl;
 
-{
-    const double total_j   = g_energy.cpu_j + g_energy.gpu_j;
-    const double avg_watts = (g_energy.seconds > 0) ? total_j / g_energy.seconds : 0.0;
-
-    std::cout << "\n[ccenergy-summary] label=" << g_cfg.label
-              << " frames_seconds=" << g_energy.seconds
-              << " cpu_j="  << g_energy.cpu_j
-              << " gpu_j="  << g_energy.gpu_j
-              << " total_j="<< total_j
-              << " avg_w="  << avg_watts
-              << std::endl;
-}
     return 0;
 }
