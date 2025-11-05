@@ -38,7 +38,7 @@ struct MatrixTag {};
 double west_function(int left, int centre, int right)
 {
     float A;
-    A = (Rho * u) / (right - left) - (2 * Gamma) / ((right - left) * (centre - left));
+    A = - (Rho * u) / (right - left) - (2 * Gamma) / ((right - left) * (centre - left));
     return A;
 }
 
@@ -108,6 +108,7 @@ int main(int argc, char* argv[]) {
             for(int i = 1; i <= Nx-1; ++i) {
                 double A_W = west_function(i-1, i, i+1);
                 double A_E = east_function(i-1, i, i+1);
+                
                 // Updates Matrix Diagonal
                 diag.b.push_back(-A_W-A_E);
                 // Initialize value of conserved Quantity
@@ -116,14 +117,15 @@ int main(int argc, char* argv[]) {
                 if (i == 1) {   
                     east.c.push_back(A_E);
                     Qvec.q.push_back(-A_W * Start);
-                } else if (i == Nx-2) {
+                } else if (i == Nx-1) {
                     west.a.push_back(A_W);
                     Qvec.q.push_back(-A_E * End);
                 } else {
                     west.a.push_back(A_W);
                     east.c.push_back(A_E);
-                    Qvec.q.push_back(0);
+                    Qvec.q.push_back(0);    
                 }
+                //std::cout << Qvec.q[i-1] << "\n";
             }
             conserved.phi.push_back(End);
         });
