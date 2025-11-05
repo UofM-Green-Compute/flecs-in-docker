@@ -1,51 +1,165 @@
 /*
-This code runs a simulation of N coupled oscillators.
-
-Each mass has equations of motion depending on the properties
-the springs it is connected to. 
-
-First the acceleration of each particle is computed.
-
-Than the program iterates to update the position, velocity, 
-and acceleration of each entity for which that is relevant.
-
-Entity types:
- - Particle
+This code runs a simulation of a simple fluid which can be 
+solved analytically.
 */
 
 #include <iostream>
-#include <fstream> 
 #include <vector>
-#include <cmath>
 #include <flecs.h>
 #include <systems.h>
 
-const int Nx = 150;  // Number of nodes in x-axis
-const int Ny = 150;  // Number of nodes in y-axis
+// Number of nodes in x-axis. Also equal to the length in unit of node distance
+const int Nx = 20;  
+const int Pe = 1; // Peclet Number
+const double Rho = 2; // Density
+const double u = 5; // Speed
 
-/* Creat structs to be used as components*/
-struct Position { int x, y; };
+// Calculates Diffusivity
+double Gamma = (Rho * u * Nx) / Pe;
+
+// Boundary Conditions
+double Start = 0;
+double End = 10;
+
+/* Create structs to be used as components for nodes
+struct Position { int x; };
 struct Conserved { double phi; };
+struct NodeTag {};
+*/
+
+/*Create structs to be used as components for the matrix*/
+struct West { std::vector<double> a; };
+struct Diagonal { std::vector<double> b; };
+struct East { std::vector<double> c; };
+struct Qvector { std::vector<double> q; };
+struct Conserved { std::vector<double> phi; };
+struct MatrixTag {};
+
+double west_function(int left, int centre, int right)
+{
+    float A;
+    A = (Rho * u) / (right - left) - (2 * Gamma) / ((right - left) * (centre - left));
+    return A;
+}
+
+double east_function(int left, int centre, int right)
+{
+    float A;
+    A = (Rho * u) / (right - left) - (2 * Gamma) / ((right - left) * (right - centre));
+    return A;
+}
 
 int main(int argc, char* argv[]) {
-    /* Create the World */
+    // Create the World
     flecs::world world(argc, argv);
 
-    /* Create components to be assigned to entities*/
+    // Create components to be assigned to node entities
+    /*
     world.component<Position>();
     world.component<Conserved>();
+    world.component<NodeTag>();
+    */
 
-    /* Create Nodes */
-    std::vector<std::vector<flecs::entity>> nodes;  // place to store nodes
-    nodes.reserve(Nx * Ny);  // Create the space
+    // Create components to be assigned to matrix entities
+    world.component<West>();
+    world.component<Diagonal>();
+    world.component<East>();
+    world.component<Qvector>();
+    world.component<Conserved>();
+    world.component<MatrixTag>();
+
+    /*
+    // Create Nodes as entities
+    std::vector<flecs::entity> nodes;  // place to store nodes
+    nodes.reserve(Nx);  // Create the space
     for (int i = 0; i < Nx; ++i) {
-        nodes.push_back(std::vector<flecs::entity>{});
-        for (int j = 0; j < Ny; ++j) {
-            nodes[i].push_back( 
-                world.entity()
-                    .set<Position>({i, j})
-                    .set<Conserved>({2}));
+        // Make new node with a position
+        nodes.push_back( 
+        world.entity()
+            .add<NodeTag>()
+            .set<Position>({i}));
+
+        // Add conserved component to node entity
+        if (i == 0) {
+            nodes[i].set<Conserved>({0});
+        } else if (i == Nx - 1) {
+            nodes[i].set<Conserved>({10});
+        } else {
+            nodes[i].set<Conserved>({0});
         }
     }
+    */
+
+    // Create the Matrix as an entity
+    world.entity("Matrix")
+        .add<MatrixTag>()
+        .set<West>({})
+        .set<Diagonal>({})
+        .set<East>({})
+        .set<Qvector>({})
+        .set<Conserved>({});
+
+    // System to Initialise Matrix
+    world.system<West, Diagonal, East, Qvector, Conserved>()
+        .with<MatrixTag>()
+        .kind(flecs::PreUpdate)
+        .each([](West& west, Diagonal& diag, East& east, Qvector& Qvec, Conserved& conserved){
+            conserved.phi.push_back(Start);
+            for(int i = 1; i <= Nx-1; ++i) {
+                double A_W = west_function(i-1, i, i+1);
+                double A_E = east_function(i-1, i, i+1);
+                // Updates Matrix Diagonal
+                diag.b.push_back(-A_W-A_E);
+                // Initialize value of conserved Quantity
+                conserved.phi.push_back(0);
+                // Updates Matrix Off-Diagonals and Q vector
+                if (i == 1) {   
+                    east.c.push_back(A_E);
+                    Qvec.q.push_back(-A_W * Start);
+                } else if (i == Nx-2) {
+                    west.a.push_back(A_W);
+                    Qvec.q.push_back(-A_E * End);
+                } else {
+                    west.a.push_back(A_W);
+                    east.c.push_back(A_E);
+                    Qvec.q.push_back(0);
+                }
+            }
+            conserved.phi.push_back(End);
+        });
     
+    // System to Compute value of conserved quantity inside system
+    world.system<West, Diagonal, East, Qvector, Conserved>()
+        .with<MatrixTag>()
+        .kind(flecs::OnUpdate)
+        .each([](West& west, Diagonal& diag, East& east, Qvector& Qvec, Conserved& conserved){
+            for(int i = 0; i <= Nx-2; ++i) {
+                if (i == 0) {
+                    east.c[i] = east.c[i] / diag.b[i];
+                    Qvec.q[i] = Qvec.q[i] / diag.b[i];
+                } else if (i == Nx - 2) {
+                    Qvec.q[i] = (Qvec.q[i] - 
+                        west.a[i-1]*Qvec.q[i-1]) / (diag.b[i] - west.a[i-1]*east.c[i-1]);
+                } else {
+                    east.c[i] = east.c[i] / (diag.b[i] - west.a[i-1]*east.c[i-1]);
+                    Qvec.q[i] = (Qvec.q[i] - 
+                        west.a[i-1]*Qvec.q[i-1]) / (diag.b[i] - west.a[i-1]*east.c[i-1]);
+                }
+            }
+            for(int i = Nx-1; i >= 1; --i) {
+                if (i == Nx - 1 ) {
+                    conserved.phi[i] = Qvec.q[i-1];
+                } else {
+                    conserved.phi[i] = Qvec.q[i-1] - east.c[i-1] * conserved.phi[i+1];
+                }
+            }
+            
+            for (int i = 0; i <= Nx; ++i) {
+                    std::cout << conserved.phi[i] << "\n";
+                }
+            
+        });
+
+    world.progress();
+    //std::cout << 3 << "\n";
 }
