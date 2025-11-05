@@ -5,12 +5,13 @@ solved analytically.
 
 #include <iostream>
 #include <vector>
+#include <fstream> 
 #include <flecs.h>
 #include <systems.h>
 
 // Number of nodes in x-axis. Also equal to the length in unit of node distance
-const int Nx = 20;  
-const int Pe = 1; // Peclet Number
+const int Nx = 41; // Number of nodes
+const int Pe = 50; // Peclet Number
 const double Rho = 2; // Density
 const double u = 5; // Speed
 
@@ -19,13 +20,7 @@ double Gamma = (Rho * u * Nx) / Pe;
 
 // Boundary Conditions
 double Start = 0;
-double End = 10;
-
-/* Create structs to be used as components for nodes
-struct Position { int x; };
-struct Conserved { double phi; };
-struct NodeTag {};
-*/
+double End = 1;
 
 /*Create structs to be used as components for the matrix*/
 struct West { std::vector<double> a; };
@@ -50,15 +45,19 @@ double east_function(int left, int centre, int right)
 }
 
 int main(int argc, char* argv[]) {
+    // Prepare Save File
+    std::ofstream MyFile; 
+    MyFile.open("starter_fluid.txt");
+    if (!MyFile.is_open())
+    {
+        std::cout<<"Error in creating file"<<std::endl; 
+        return 1; 
+    }
+
+    MyFile << "Node position, Conserved Quantity" << std::endl;
+
     // Create the World
     flecs::world world(argc, argv);
-
-    // Create components to be assigned to node entities
-    /*
-    world.component<Position>();
-    world.component<Conserved>();
-    world.component<NodeTag>();
-    */
 
     // Create components to be assigned to matrix entities
     world.component<West>();
@@ -67,28 +66,6 @@ int main(int argc, char* argv[]) {
     world.component<Qvector>();
     world.component<Conserved>();
     world.component<MatrixTag>();
-
-    /*
-    // Create Nodes as entities
-    std::vector<flecs::entity> nodes;  // place to store nodes
-    nodes.reserve(Nx);  // Create the space
-    for (int i = 0; i < Nx; ++i) {
-        // Make new node with a position
-        nodes.push_back( 
-        world.entity()
-            .add<NodeTag>()
-            .set<Position>({i}));
-
-        // Add conserved component to node entity
-        if (i == 0) {
-            nodes[i].set<Conserved>({0});
-        } else if (i == Nx - 1) {
-            nodes[i].set<Conserved>({10});
-        } else {
-            nodes[i].set<Conserved>({0});
-        }
-    }
-    */
 
     // Create the Matrix as an entity
     world.entity("Matrix")
@@ -125,7 +102,7 @@ int main(int argc, char* argv[]) {
                     east.c.push_back(A_E);
                     Qvec.q.push_back(0);    
                 }
-                //std::cout << Qvec.q[i-1] << "\n";
+
             }
             conserved.phi.push_back(End);
         });
@@ -134,7 +111,7 @@ int main(int argc, char* argv[]) {
     world.system<West, Diagonal, East, Qvector, Conserved>()
         .with<MatrixTag>()
         .kind(flecs::OnUpdate)
-        .each([](West& west, Diagonal& diag, East& east, Qvector& Qvec, Conserved& conserved){
+        .each([&](West& west, Diagonal& diag, East& east, Qvector& Qvec, Conserved& conserved){
             for(int i = 0; i <= Nx-2; ++i) {
                 if (i == 0) {
                     east.c[i] = east.c[i] / diag.b[i];
@@ -157,11 +134,11 @@ int main(int argc, char* argv[]) {
             }
             
             for (int i = 0; i <= Nx; ++i) {
-                    std::cout << conserved.phi[i] << "\n";
+                    MyFile << i << ", " << conserved.phi[i] << std::endl; 
                 }
             
         });
 
     world.progress();
-    //std::cout << 3 << "\n";
+    MyFile.close();
 }
