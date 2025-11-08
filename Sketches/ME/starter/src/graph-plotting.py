@@ -5,7 +5,6 @@ from matplotlib.animation import FuncAnimation
 import os
 
 # Open data file
-
 root_folder = os.path.dirname(os.path.dirname(__file__))
 data_path = os.path.join(root_folder, "outputs", "Coupled_Oscillators.txt")
 file = open(data_path)
