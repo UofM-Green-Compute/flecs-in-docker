@@ -22,6 +22,9 @@ double Gamma = (Rho * u * Nx) / Pe;
 double Start = 0;
 double End = 1;
 
+// Matrix struct (OD used in my first version of the code)
+struct Matrix { std::vector<std::vector<double>> M; }; 
+
 // Create structs to be used as components for the matrix 
 struct West { std::vector<double> a; };
 struct Diagonal { std::vector<double> b; };
@@ -30,7 +33,7 @@ struct Qvector { std::vector<double> q; };
 struct Conserved { std::vector<double> phi; };
 struct MatrixTag {};
 
-// 
+// - Mattias 
 double west_function(int left, int centre, int right)
 {
     float A;
@@ -38,7 +41,7 @@ double west_function(int left, int centre, int right)
     return A;
 }
 
-//
+// - Mattias 
 double east_function(int left, int centre, int right)
 {
     float A;
@@ -46,20 +49,36 @@ double east_function(int left, int centre, int right)
     return A;
 }
 
-////////////////////////////////////////////////////
+// INPUT MATRICES MUST BE PLACED IN THE FOLLOWING ORDER {main diagonal, upper diagonal, lower diagonal}
+std::vector<std::vector<double>> diagonals_to_matrix(std::vector<double> main_diag, std::vector<double> upper_diag, std::vector<double> lower_diag)
+{
+    std::vector<std::vector<double>> matrix; 
 
-struct Matrix { std::vector<std::vector<double>> M; }; 
+    for(int i = 0; i < main_diag.size(); i++)
+    {
+        matrix.push_back({});
+        for(int j = 0; j < main_diag.size(); j++) 
+        { 
+            if (i == j){ matrix[i].push_back(main_diag[j]); }
+            else if (i == j-1 && j > 0){ matrix[i].push_back(upper_diag[j-1]); }
+            else if (i == j+1){ matrix[i].push_back(lower_diag[j]); }
+            else {  matrix[i].push_back(0); }
+        }
+    }
+    return matrix; 
+}
 
+// Function to perform gauss elimination operations on each row of the matrix - Oluwole
 std::vector<double> row_manipulation(std::vector<double> ith_row, std::vector<double> first_row, int column)
 {
     for (int i = column; i < ith_row.size(); i++)
     {
         ith_row[i] = ith_row[i] - first_row[i] * ith_row[column] / first_row[column]; 
     }
-
     return ith_row; 
 }
 
+// Function to print elements of a matrix - Oluwole 
 void print_matrix(std::vector<std::vector<double>> matrix)
 {
     std::cout<<"-------"<<std::endl; 
@@ -71,6 +90,7 @@ void print_matrix(std::vector<std::vector<double>> matrix)
     std::cout<<"-------"<<std::endl;
 }
 
+// Function to print elements of a vector - Oluwole
 void print_vector(std::vector<double> vector)
 {
     std::cout<<"---------------------------------"<<std::endl; 
@@ -93,12 +113,12 @@ int main() {
     world.component<Conserved>();
     world.component<MatrixTag>();
 
-    /* Create matrix 
+    // Create matrix 
     std::vector<std::vector<double>> matrix = {{1,-3,4},{2,-5,6},{-3,3,4}}; 
-    print_matrix(matrix); 
+    //print_matrix(matrix); 
     world.entity("Matrix 1")
         .set<Matrix>({matrix});
-    */
+    
 
     // Create the Matrix as an entity
     world.entity("Matrix")
@@ -138,16 +158,26 @@ int main() {
 
             }
             conserved.phi.push_back(End);
-
             print_vector(conserved.phi); 
+
+            std::cout<<"Hello"<<std::endl; 
+            std::vector<std::vector<double>> Matrix = diagonals_to_matrix({1,1,1}, {2,2}, {3,3});
+            print_matrix(Matrix);  
         });
 
-    /////////////////
-    /////////////////
-    /////////////////
-    /////////////////
     ///////////////// Seems that mattias code doesnt prodice a full matrix but
     ///////////////// only the elements of it needed to use his method. I need to make a full matrix
+
+    // System to Compute value of conserved quantity inside system
+    world.system<West, Diagonal, East, Qvector, Conserved>()
+        .with<MatrixTag>()
+        .kind(flecs::OnUpdate)
+        .each([&](West& west, Diagonal& diag, East& east, Qvector& Qvec, Conserved& conserved){
+
+            //std::vector<std::vector<double>> Matrix = diagonals_to_matrix(diag.b, east.c, west.a); 
+            //print_matrix(Matrix); 
+
+        });
         
     flecs::system matrix_solver = world.system<Matrix>() 
     .each([&](Matrix &matrix)
@@ -162,10 +192,10 @@ int main() {
             matrix.M[j] = row_manipulation(matrix.M[j], matrix.M[j], i);
             }
         }
-
-        print_matrix(matrix.M);
+        // print_matrix(matrix.M);
     });
 
+    //world.progress(); 
     initialise_matrix.run(); 
     matrix_solver.run(); 
 }
