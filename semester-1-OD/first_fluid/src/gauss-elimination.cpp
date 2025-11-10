@@ -1,5 +1,12 @@
 /*
 Program to trial gauss elimination
+
+1. Gauss elimination doesn't know what to do when one of the elements of the matrix is 0
+    If the element we hit is 0, swap the order of two rows
+    This article looks helpful: https://www.statlect.com/matrix-algebra/Gaussian-elimination
+2. Passing "Matrix[j]" into row_manipulation twice? 
+3. Double check that the gauss elimination, diagonals_to_matrix functions are rigorous 
+
 */
 
 #include <algorithm>
@@ -160,9 +167,6 @@ int main() {
             print_vector(conserved.phi); 
         });
 
-    ///////////////// Seems that mattias code doesnt prodice a full matrix but
-    ///////////////// only the elements of it needed to use his method. I need to make a full matrix
-
     // System to Compute value of conserved quantity inside system
     world.system<West, Diagonal, East, Qvector, Conserved>()
         .with<MatrixTag>()
@@ -170,7 +174,20 @@ int main() {
         .each([&](West& west, Diagonal& diag, East& east, Qvector& Qvec, Conserved& conserved){
 
             std::cout<<"Please please please work I'm Sabrina Carpenter"<<std::endl; 
+
             std::vector<std::vector<double>> Matrix = diagonals_to_matrix(diag.b, east.c, west.a); 
+
+            int no_rows = Matrix.size();
+            int no_columns = Matrix[0].size(); 
+
+            for (int i = 0; i < no_columns-1; i++)
+            {
+                for(int j = i+1; j < no_rows; j++)
+                {
+                Matrix[j] = row_manipulation(Matrix[j], Matrix[j], i);
+                }
+            }
+
             print_matrix(Matrix); 
 
         });
@@ -178,16 +195,7 @@ int main() {
     flecs::system matrix_solver = world.system<Matrix>() 
     .each([&](Matrix &matrix)
     {
-        int no_rows = matrix.M.size();
-        int no_columns = matrix.M[0].size(); 
-
-        for (int i = 0; i < no_columns-1; i++)
-        {
-            for(int j = i+1; j < no_rows; j++)
-            {
-            matrix.M[j] = row_manipulation(matrix.M[j], matrix.M[j], i);
-            }
-        }
+        
         // print_matrix(matrix.M);
     });
 
