@@ -68,7 +68,7 @@ std::vector<std::vector<double>> diagonals_to_matrix(std::vector<double> main_di
     return matrix; 
 }
 
-// Function to perform gauss elimination operations on each row of the matrix - Oluwole
+// Function to perform gauss elimination operations on each row of the matrix 
 std::vector<double> row_manipulation(std::vector<double> ith_row, std::vector<double> first_row, int column)
 {
     for (int i = column; i < ith_row.size(); i++)
@@ -78,7 +78,7 @@ std::vector<double> row_manipulation(std::vector<double> ith_row, std::vector<do
     return ith_row; 
 }
 
-// Function to print elements of a matrix - Oluwole 
+// Function to print elements of a matrix 
 void print_matrix(std::vector<std::vector<double>> matrix)
 {
     std::cout<<"-------"<<std::endl; 
@@ -119,7 +119,6 @@ int main() {
     world.entity("Matrix 1")
         .set<Matrix>({matrix});
     
-
     // Create the Matrix as an entity
     world.entity("Matrix")
         .add<MatrixTag>()
@@ -159,10 +158,6 @@ int main() {
             }
             conserved.phi.push_back(End);
             print_vector(conserved.phi); 
-
-            std::cout<<"Hello"<<std::endl; 
-            std::vector<std::vector<double>> Matrix = diagonals_to_matrix({1,1,1}, {2,2}, {3,3});
-            print_matrix(Matrix);  
         });
 
     ///////////////// Seems that mattias code doesnt prodice a full matrix but
@@ -174,8 +169,9 @@ int main() {
         .kind(flecs::OnUpdate)
         .each([&](West& west, Diagonal& diag, East& east, Qvector& Qvec, Conserved& conserved){
 
-            //std::vector<std::vector<double>> Matrix = diagonals_to_matrix(diag.b, east.c, west.a); 
-            //print_matrix(Matrix); 
+            std::cout<<"Please please please work I'm Sabrina Carpenter"<<std::endl; 
+            std::vector<std::vector<double>> Matrix = diagonals_to_matrix(diag.b, east.c, west.a); 
+            print_matrix(Matrix); 
 
         });
         
@@ -195,7 +191,7 @@ int main() {
         // print_matrix(matrix.M);
     });
 
-    //world.progress(); 
+    world.progress(); 
     initialise_matrix.run(); 
     matrix_solver.run(); 
 }
