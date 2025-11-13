@@ -100,6 +100,7 @@ int main(int argc, char *argv[]) {
     std::vector<flecs::entity> nodes; // place to store nodes
     nodes.reserve(N); // Create the space
     
+    // Create left boundary Node
     nodes.push_back(
             world.entity()
                 .add<End_Tag>() 
@@ -109,7 +110,8 @@ int main(int argc, char *argv[]) {
                 .set<phihalf_correct>({0})
                 .set<phi_end_predict>({0})
             );
-
+    
+    // Create non-boundary Nodes
     for (int index = 1; index <= N-1; ++index) {
         double phi_initial;
         phi_initial = linear_function(index*L/N, Start, End);
@@ -125,6 +127,7 @@ int main(int argc, char *argv[]) {
             );
     }
 
+    // Create Right Boundary Nodes
     nodes.push_back(
             world.entity()
                 .add<End_Tag>() 
@@ -134,50 +137,46 @@ int main(int argc, char *argv[]) {
                 .set<phi_end_predict>({0})
             );
 
+    // This system saves phi_start to the txt file
     world.system()
-        .kind(Save)
-        .run([](flecs::iter&) {
-            std::cout << "save!\n";
-        });
-
-    world.system()
-        .kind(RungeKutta_1)
-        .run([](flecs::iter&) {
-            std::cout << "runge1!\n";
-        });
+        .kind(Save);
     
+    // This system finds and updates phihalf_predict
     world.system()
-        .kind(RungeKutta_2)
-        .run([](flecs::iter&) {
-            std::cout << "runge2!\n";
-        });
+        .kind(RungeKutta_1);
     
+    // This system finds and updates phihalf_correct
     world.system()
-        .kind(RungeKutta_3)
-        .run([](flecs::iter&) {
-            std::cout << "runge3!\n";
-        });
+        .kind(RungeKutta_2);
+    
+    // This system finds and updates phi_end_predict
+    world.system()
+        .kind(RungeKutta_3);
 
+    // This system finds and updates phi_end_correct
     world.system()
-        .kind(RungeKutta_4)
-        .run([](flecs::iter&) {
-            std::cout << "runge4!\n";
-        });
+        .kind(RungeKutta_4);
 
+    // This updates phi_start by replacing it with phi_end_correct
     world.system()
-        .kind(Update)
-        .run([](flecs::iter&) {
-            std::cout << "update!\n";
-        });
+        .kind(Update);
     
     // Prepare Save File
     std::ofstream MyFile;
-    MyFile.open("starter_fluid.txt");
+    MyFile.open("1D_dynamic_fluidtxt");
+
+    // Check Save File is open/created
     if (!MyFile.is_open())
     {
         std::cout<<"Error in creating file"<<std::endl; 
         return 1; 
     }
-    world.progress();
+    
+    // Run through systems every time step
+    for (int t_step = 0; t_step <= STEPS; ++t_step) {
+        world.progress();
+    }
+    
+    // Close Save File
     MyFile.close();
 }
