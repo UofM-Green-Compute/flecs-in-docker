@@ -10,7 +10,7 @@ system which begins out of equilibrium
 
 // Sets time parameters
 int STEPS = 100;
-int TIME = 60;
+int TIME = 1;
 
 // Number of nodes in x-axis. Also equal to the length in unit of node distance
 const double L = 1; // Length
@@ -27,14 +27,14 @@ double Start = 0;
 double End = 1;
 
 // Position Component
-struct position {double x; };
+struct Position {double x; };
 
 // Field components
-struct phi_start { double i; };
-struct phihalf_predict { double i; };
-struct phihalf_correct { double i; };
-struct phi_end_predict { double i; };
-struct phi_end_correct { double i; };
+struct Phi_start { double i; };
+struct Phihalf_predict { double i; };
+struct Phihalf_correct { double i; };
+struct Phi_end_predict { double i; };
+struct Phi_end_correct { double i; };
 
 // Component Tags
 struct Middle_Tag {};
@@ -57,6 +57,16 @@ double fluid_function(double phi_left, double phi, double phi_right,
 }
 
 int main(int argc, char *argv[]) {
+    // Prepare Save File
+    std::ofstream MyFile;
+    MyFile.open("1D_dynamic_fluidtxt");
+
+    // Check Save File is open/created
+    if (!MyFile.is_open())
+    {
+        std::cout<<"Error in creating file"<<std::endl; 
+        return 1; 
+    }
     // Create World
     flecs::world world(argc, argv);
 
@@ -89,13 +99,13 @@ int main(int argc, char *argv[]) {
     world.component<Middle_Tag>();
     world.component<End_Tag>();
 
-    world.component<position>();
+    world.component<Position>();
 
-    world.component<phi_start>();
-    world.component<phihalf_predict>();
-    world.component<phihalf_correct>();
-    world.component<phi_end_predict>();
-    world.component<phi_end_correct>();
+    world.component<Phi_start>();
+    world.component<Phihalf_predict>();
+    world.component<Phihalf_correct>();
+    world.component<Phi_end_predict>();
+    world.component<Phi_end_correct>();
 
     std::vector<flecs::entity> nodes; // place to store nodes
     nodes.reserve(N); // Create the space
@@ -104,26 +114,26 @@ int main(int argc, char *argv[]) {
     nodes.push_back(
             world.entity()
                 .add<End_Tag>() 
-                .set<position>({0})
-                .set<phi_start>({0})
-                .set<phihalf_predict>({0})
-                .set<phihalf_correct>({0})
-                .set<phi_end_predict>({0})
+                .set<Position>({0})
+                .set<Phi_start>({Start})
+                .set<Phihalf_predict>({Start})
+                .set<Phihalf_correct>({Start})
+                .set<Phi_end_predict>({Start})
             );
     
     // Create non-boundary Nodes
-    for (int index = 1; index <= N-1; ++index) {
+    for (int index = 1; index < N-1; ++index) {
         double phi_initial;
         phi_initial = linear_function(index*L/N, Start, End);
         nodes.push_back(
             world.entity()
                 .add<Middle_Tag>() 
-                .set<position>({index*L/N})
-                .set<phi_start>({phi_initial})
-                .set<phihalf_predict>({0})
-                .set<phihalf_correct>({0})
-                .set<phi_end_predict>({0})
-                .set<phi_end_correct>({0})
+                .set<Position>({index*L/N})
+                .set<Phi_start>({phi_initial})
+                .set<Phihalf_predict>({0})
+                .set<Phihalf_correct>({0})
+                .set<Phi_end_predict>({0})
+                .set<Phi_end_correct>({0})
             );
     }
 
@@ -131,15 +141,24 @@ int main(int argc, char *argv[]) {
     nodes.push_back(
             world.entity()
                 .add<End_Tag>() 
-                .set<position>({L})
-                .set<phihalf_predict>({0})
-                .set<phihalf_correct>({0})
-                .set<phi_end_predict>({0})
+                .set<Position>({L})
+                .set<Phi_start>({End})
+                .set<Phihalf_predict>({End})
+                .set<Phihalf_correct>({End})
+                .set<Phi_end_predict>({End})
             );
 
     // This system saves phi_start to the txt file
-    world.system()
-        .kind(Save);
+    world.system<Position, Phi_start>()
+        .kind(Save)
+        .each([&](Position pos, Phi_start phi){
+            if (pos.x == L) {
+                MyFile << phi.i << "\n";
+            } else {
+                MyFile << phi.i << ", ";
+            }
+
+        });
     
     // This system finds and updates phihalf_predict
     world.system()
@@ -161,19 +180,20 @@ int main(int argc, char *argv[]) {
     world.system()
         .kind(Update);
     
-    // Prepare Save File
-    std::ofstream MyFile;
-    MyFile.open("1D_dynamic_fluidtxt");
-
-    // Check Save File is open/created
-    if (!MyFile.is_open())
-    {
-        std::cout<<"Error in creating file"<<std::endl; 
-        return 1; 
+    // Set .txt file headers
+    MyFile << "t, ";
+    for (int x_step = 0; x_step < N; ++x_step) {
+        if (x_step == N-1) {
+            MyFile << "x" << x_step << "\n";
+        } else {
+            MyFile << "x" << x_step << ", ";
+        }
     }
     
     // Run through systems every time step
     for (int t_step = 0; t_step <= STEPS; ++t_step) {
+        std::cout<<t_step<<"\n";
+        MyFile << t_step << ", ";
         world.progress();
     }
     
