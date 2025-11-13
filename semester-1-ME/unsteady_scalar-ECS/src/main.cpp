@@ -2,7 +2,6 @@
 This code runs a simulation of a simple fluid which can be 
 solved analytically.
 */
-
 #include <custom_pipeline.h>
 #include <iostream>
 #include <vector>
@@ -84,11 +83,6 @@ int main(int argc, char* argv[]) {
     flecs::entity pipeline = world.pipeline()
         .with(flecs::System)
         .with<Save>()
-        .with<RungeKutta_1>()
-        .with<RungeKutta_2>()
-        .with<RungeKutta_3>()
-        .with<RungeKutta_4>()
-        .with<Update>()
         .build();
     world.set_pipeline(pipeline);
 
@@ -142,6 +136,13 @@ int main(int argc, char* argv[]) {
                 .set<phinext_first>({0})
             );
     
+    world.system()
+        .kind<Save>()
+        .run([](flecs::iter&) {
+            std::cout << "System ran!\n";
+        });
+    
     world.progress();
+
     MyFile.close();
 }
