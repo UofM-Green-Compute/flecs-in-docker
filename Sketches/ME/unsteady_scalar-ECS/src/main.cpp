@@ -83,6 +83,7 @@ int main(int argc, char* argv[]) {
     flecs::entity pipeline = world.pipeline()
         .with(flecs::System)
         .with<Save>()
+        .with<RungeKutta_1>()
         .build();
     world.set_pipeline(pipeline);
 
@@ -138,6 +139,12 @@ int main(int argc, char* argv[]) {
     
     world.system()
         .kind<Save>()
+        .run([](flecs::iter&) {
+            std::cout << "System ran!\n";
+        });
+
+    world.system()
+        .kind<RungeKutta_1>()
         .run([](flecs::iter&) {
             std::cout << "System ran!\n";
         });
