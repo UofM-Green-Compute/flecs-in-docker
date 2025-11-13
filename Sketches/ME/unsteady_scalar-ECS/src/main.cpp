@@ -1,14 +1,12 @@
 /*
-This code runs a simulation of a simple fluid which can be 
-solved analytically.
+This code looks at the dynamical evolution of a 1D convection-conduction
+system which begins out of equilibrium
 */
-#include <custom_pipeline.h>
+
+#include <custom_phases_no_builtin.h>
 #include <iostream>
-#include <vector>
 #include <fstream> 
-#include <flecs.h>
-#include <systems.h>
-#include <cmath>
+#include <vector>
 
 // Sets time parameters
 int STEPS = 100;
@@ -28,23 +26,15 @@ double GAMMA = (RHO * U * L) / PE;
 double Start = 0;
 double End = 1;
 
-// Pipeline structs
-struct Save {};
-struct RungeKutta_1 {};
-struct RungeKutta_2 {};
-struct RungeKutta_3 {};
-struct RungeKutta_4 {};
-struct Update {};
-
 // Position Component
 struct position {double x; };
 
 // Field components
 struct phi_start { double i; };
-struct phihalf_first { double i; };
-struct phihalf_second { double i; };
-struct phinext_first { double i; };
-struct phinext_final { double i; };
+struct phihalf_predict { double i; };
+struct phihalf_correct { double i; };
+struct phi_end_predict { double i; };
+struct phi_end_correct { double i; };
 
 // Component Tags
 struct Middle_Tag {};
@@ -66,26 +56,34 @@ double fluid_function(double phi_left, double phi, double phi_right,
     return f;
 }
 
-int main(int argc, char* argv[]) {
-    // Prepare Save File
-    std::ofstream MyFile;
-    MyFile.open("starter_fluid.txt");
-    if (!MyFile.is_open())
-    {
-        std::cout<<"Error in creating file"<<std::endl; 
-        return 1; 
-    }
-
-    // Create the World
+int main(int argc, char *argv[]) {
+    // Create World
     flecs::world world(argc, argv);
 
-    // Set up custom pipeline
-    flecs::entity pipeline = world.pipeline()
-        .with(flecs::System)
-        .with<Save>()
-        .with<RungeKutta_1>()
-        .build();
-    world.set_pipeline(pipeline);
+    // Creates Phases which tell the program in which order to run the systems
+    
+    flecs::entity Save = world.entity()
+        .add(flecs::Phase); // This Phase saves the state in its current form
+
+    flecs::entity RungeKutta_1 = world.entity()
+        .add(flecs::Phase) // This Phase calculates phihalf_predict
+        .depends_on(Save);
+
+    flecs::entity RungeKutta_2 = world.entity()
+        .add(flecs::Phase) // This Phase calculates phihalf_correct
+        .depends_on(RungeKutta_1);
+
+    flecs::entity RungeKutta_3 = world.entity()
+        .add(flecs::Phase) // This Phase calculates phi_end_predict
+        .depends_on(RungeKutta_2);
+
+    flecs::entity RungeKutta_4 = world.entity()
+        .add(flecs::Phase) // This Phase calculates phi_end_correct
+        .depends_on(RungeKutta_3);
+
+    flecs::entity Update = world.entity()
+        .add(flecs::Phase) // This phase replaces phi_start with phi_end_correct
+        .depends_on(RungeKutta_4);
 
     // Create components inside the world
     world.component<Middle_Tag>();
@@ -94,10 +92,10 @@ int main(int argc, char* argv[]) {
     world.component<position>();
 
     world.component<phi_start>();
-    world.component<phihalf_first>();
-    world.component<phihalf_second>();
-    world.component<phinext_first>();
-    world.component<phinext_final>();
+    world.component<phihalf_predict>();
+    world.component<phihalf_correct>();
+    world.component<phi_end_predict>();
+    world.component<phi_end_correct>();
 
     std::vector<flecs::entity> nodes; // place to store nodes
     nodes.reserve(N); // Create the space
@@ -107,9 +105,9 @@ int main(int argc, char* argv[]) {
                 .add<End_Tag>() 
                 .set<position>({0})
                 .set<phi_start>({0})
-                .set<phihalf_first>({0})
-                .set<phihalf_second>({0})
-                .set<phinext_first>({0})
+                .set<phihalf_predict>({0})
+                .set<phihalf_correct>({0})
+                .set<phi_end_predict>({0})
             );
 
     for (int index = 1; index <= N-1; ++index) {
@@ -120,10 +118,10 @@ int main(int argc, char* argv[]) {
                 .add<Middle_Tag>() 
                 .set<position>({index*L/N})
                 .set<phi_start>({phi_initial})
-                .set<phihalf_first>({0})
-                .set<phihalf_second>({0})
-                .set<phinext_first>({0})
-                .set<phinext_final>({0})
+                .set<phihalf_predict>({0})
+                .set<phihalf_correct>({0})
+                .set<phi_end_predict>({0})
+                .set<phi_end_correct>({0})
             );
     }
 
@@ -131,25 +129,55 @@ int main(int argc, char* argv[]) {
             world.entity()
                 .add<End_Tag>() 
                 .set<position>({L})
-                .set<phi_start>({0})
-                .set<phihalf_first>({0})
-                .set<phihalf_second>({0})
-                .set<phinext_first>({0})
+                .set<phihalf_predict>({0})
+                .set<phihalf_correct>({0})
+                .set<phi_end_predict>({0})
             );
-    
+
     world.system()
-        .kind<Save>()
+        .kind(Save)
         .run([](flecs::iter&) {
-            std::cout << "System ran!\n";
+            std::cout << "save!\n";
         });
 
     world.system()
-        .kind<RungeKutta_1>()
+        .kind(RungeKutta_1)
         .run([](flecs::iter&) {
-            std::cout << "System ran!\n";
+            std::cout << "runge1!\n";
         });
     
+    world.system()
+        .kind(RungeKutta_2)
+        .run([](flecs::iter&) {
+            std::cout << "runge2!\n";
+        });
+    
+    world.system()
+        .kind(RungeKutta_3)
+        .run([](flecs::iter&) {
+            std::cout << "runge3!\n";
+        });
+
+    world.system()
+        .kind(RungeKutta_4)
+        .run([](flecs::iter&) {
+            std::cout << "runge4!\n";
+        });
+
+    world.system()
+        .kind(Update)
+        .run([](flecs::iter&) {
+            std::cout << "update!\n";
+        });
+    
+    // Prepare Save File
+    std::ofstream MyFile;
+    MyFile.open("starter_fluid.txt");
+    if (!MyFile.is_open())
+    {
+        std::cout<<"Error in creating file"<<std::endl; 
+        return 1; 
+    }
     world.progress();
-
     MyFile.close();
 }

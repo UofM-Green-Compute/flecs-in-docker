@@ -1,8 +1,8 @@
-#ifndef CUSTOM_PIPELINE_H
-#define CUSTOM_PIPELINE_H
+#ifndef CUSTOM_PHASES_NO_BUILTIN_H
+#define CUSTOM_PHASES_NO_BUILTIN_H
 
 /* This generated file contains includes for project dependencies */
-#include "custom_pipeline/bake_config.h"
+#include "custom_phases_no_builtin/bake_config.h"
 
 #ifdef __cplusplus
 extern "C" {
