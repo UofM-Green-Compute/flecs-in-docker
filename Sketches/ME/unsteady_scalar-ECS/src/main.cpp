@@ -71,13 +71,13 @@ int main(int argc, char *argv[]) {
     flecs::world world(argc, argv);
 
     // Creates Phases which tell the program in which order to run the systems
-    
+    /*
     flecs::entity Save = world.entity()
         .add(flecs::Phase); // This Phase saves the state in its current form
-
+    */
     flecs::entity RungeKutta_1 = world.entity()
-        .add(flecs::Phase) // This Phase calculates phihalf_predict
-        .depends_on(Save);
+        .add(flecs::Phase); // This Phase calculates phihalf_predict
+        //.depends_on(Save);
 
     flecs::entity RungeKutta_2 = world.entity()
         .add(flecs::Phase) // This Phase calculates phihalf_correct
@@ -106,6 +106,10 @@ int main(int argc, char *argv[]) {
     world.component<Phihalf_correct>();
     world.component<Phi_end_predict>();
     world.component<Phi_end_correct>();
+
+    // Creates Neighbour Relationships
+    auto Left_Neighbour = world.entity();
+    auto Right_Neighbour = world.entity();
 
     std::vector<flecs::entity> nodes; // place to store nodes
     nodes.reserve(N); // Create the space
@@ -147,8 +151,19 @@ int main(int argc, char *argv[]) {
                 .set<Phihalf_correct>({End})
                 .set<Phi_end_predict>({End})
             );
+    
+    
+
+    // This loop adds left and right neighbours to each non-boundary node
+    
+
+    for (int index = 1; index < N-1; ++index) {
+        nodes[index].add(Left_Neighbour, nodes[index-1]);
+        nodes[index].add(Right_Neighbour, nodes[index+1]);
+    }
 
     // This system saves phi_start to the txt file
+    /*
     world.system<Position, Phi_start>()
         .kind(Save)
         .each([&](Position pos, Phi_start phi){
@@ -159,10 +174,15 @@ int main(int argc, char *argv[]) {
             }
 
         });
-    
+    */
+
     // This system finds and updates phihalf_predict
-    world.system()
-        .kind(RungeKutta_1);
+    world.system<Position, Phi_start, Phihalf_predict>()
+        .with<Middle_Tag>()
+        .kind(RungeKutta_1)
+        .each([&](Position pos, Phi_start phi0, Phihalf_predict phi_half){
+            double Phi_left;
+        });
     
     // This system finds and updates phihalf_correct
     world.system()
@@ -192,8 +212,15 @@ int main(int argc, char *argv[]) {
     
     // Run through systems every time step
     for (int t_step = 0; t_step <= STEPS; ++t_step) {
-        std::cout<<t_step<<"\n";
         MyFile << t_step << ", ";
+        for (int index = 0; index < N-1; ++index) {
+            const Position& p = nodes[index].get<Position>();
+            MyFile << p.x << ", ";
+            std::cout << p.x << ", ";
+        }
+        const Position& p = nodes[N-1].get<Position>();
+        MyFile << p.x << "\n";
+        std::cout << p.x << ", ";
         world.progress();
     }
     
