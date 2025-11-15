@@ -1,3 +1,5 @@
+#include <ccenergy/EnergyTracker.hpp>
+
 #include <flecs.h>
 #include <cmath>
 #include <iostream>
@@ -52,93 +54,101 @@ static inline std::pair<int,int> pos_to_cell(const Position& p) {
     int cy = int(std::floor(ny * GY));
 
     // Robust wrap for edge cases where p==+W or +H after rounding
-    if (cx < 0) cx += GX; if (cx >= GX) cx -= GX;
-    if (cy < 0) cy += GY; if (cy >= GY) cy -= GY;
+    if (cx < 0) cx += GX;
+    if (cx >= GX) cx -= GX;
+    if (cy < 0) cy += GY;
+    if (cy >= GY) cy -= GY;
     return {cx, cy};
 }
 
 
 // --- ASCII renderer (simple dot field) ---
-struct Viewport { int w,h; double scale; }; //####//
+struct Viewport { int w,h; double scale; };
 
-static void render_ascii(const Viewport& vp, const std::vector<flecs::entity>& asteroids) { //####//
-    std::vector<std::string> buf(vp.h, std::string(vp.w, ' '));  //####//
+static void render_ascii(const Viewport& vp, const std::vector<flecs::entity>& asteroids) {
+    std::vector<std::string> buf(vp.h, std::string(vp.w, ' ')); 
 
-    auto plot = [&](double x, double y, char ch){   //####//
+    auto plot = [&](double x, double y, char ch){
         int cx = int(std::round(vp.w*0.5 + x / vp.scale));
         int cy = int(std::round(vp.h*0.5 - y / vp.scale));
         if (cx>=0 && cx<vp.w && cy>=0 && cy<vp.h) buf[cy][cx] = ch;
     };
 
-    for (auto e : asteroids) {  //####//
+    for (auto e : asteroids) {
         if (e.has<Position>()) {
             Position p = e.get<Position>();
             plot(p.x, p.y, '.');
         }
     }
 
-    std::cout << "\x1b[H";   // Move the cursor to the home of the terminal. //####//
+    std::cout << "\x1b[H";   // Move the cursor to the home of the terminal.
     for (auto& row : buf) std::cout << row << "\n";    // Print out the rows
     std::cout.flush();
 }
 
-int main(int argc, char* argv[]) {
-    flecs::world world(argc, argv); //####//
 
+int main(int argc, char* argv[]) {
+    flecs::world world(argc, argv);
+
+    // Create the energy tracker
+    ccenergy::EnergyTracker energy_tracker {{ .label = "OnUpdate",
+                                              .measure_cpu = true,
+                                              .measure_gpu  = false,
+                                              .log_to_stdout = false }};
     int K = 10;
     if (argc > 1) {
-        try { K = std::max(1, std::stoi(argv[1])); }  //####//
+        try { K = std::max(1, std::stoi(argv[1])); }
         catch (...) { std::cerr << "Invalid K; using default 10\n"; K = 10; }
     }
 
-    world.component<Position>(); //####//
-    world.component<Velocity>(); //####//
-    world.component<Accel>(); //####//
-    world.component<Mass>(); //####//
-    world.component<AsteroidTag>(); //####//
+    world.component<Position>();
+    world.component<Velocity>();
+    world.component<Accel>();
+    world.component<Mass>();
+    world.component<AsteroidTag>();
 
     // ------- Create a random swarm -------
-    const int N = 150; //####//
+    const int N = 150;
 
     // std::mt19937 rng(42);  // Initialise a random number generator with a known seed (useful for testing)
 
     // Tools for picking random numbers
     std::mt19937 rng( std::random_device{}()  ) ; // Initialise a random number generator with random device (for actual use)
 
-    std::uniform_real_distribution<double> UposX(-W, W); //####//
-    std::uniform_real_distribution<double> UposY(-H, H); //####//
-    std::uniform_real_distribution<double> Uvel(-0.4, 0.4); //####//
-    std::uniform_real_distribution<double> Umass(0.5, 2.0); //####//
+    std::uniform_real_distribution<double> UposX(-W, W);
+    std::uniform_real_distribution<double> UposY(-H, H);
+    std::uniform_real_distribution<double> Uvel(-0.4, 0.4);
+    std::uniform_real_distribution<double> Umass(0.5, 2.0);
 
-    std::vector<flecs::entity> asteroids; //####//
-    asteroids.reserve(N); //####//
+    std::vector<flecs::entity> asteroids;
+    asteroids.reserve(N);
 
-    for (int i = 0; i < N; ++i) { //####//
-        asteroids.push_back( //####//
-            world.entity() //####//
-                .add<AsteroidTag>() //####//
-                .set<Position>({UposX(rng), UposY(rng)}) //####//
-                .set<Velocity>({Uvel(rng), Uvel(rng)}) //####//
-                .set<Accel>({0.0, 0.0}) //####//
-                .set<Mass>({Umass(rng)})); //####//
-    } //####//
+    for (int i = 0; i < N; ++i) {
+        asteroids.push_back(
+            world.entity()
+                .add<AsteroidTag>()
+                .set<Position>({UposX(rng), UposY(rng)})
+                .set<Velocity>({Uvel(rng), Uvel(rng)})
+                .set<Accel>({0.0, 0.0})
+                .set<Mass>({Umass(rng)}));
+    }
 
     // Clamp K
-    K = std::min(K, std::max(1, N - 1)); //####//
+    K = std::min(K, std::max(1, N - 1));
 
     // ------- Spatial bins - used as our grid the asteroids sit inside
     // bins[c] holds *indices* into `asteroids`.
-    std::vector<std::vector<int>> bins(GX * GY); //####//
+    std::vector<std::vector<int>> bins(GX * GY);
 
-    auto rebuild_bins = [&](){ //####//
-        for (auto &b : bins) { b.clear(); } //####//
+    auto rebuild_bins = [&](){
+        for (auto &b : bins) { b.clear(); }
 
-        for (int i = 0; i < (int)asteroids.size(); ++i) { //####//
-            if (!asteroids[i].has<Position>()) //####//
-                continue; //####//
-            Position p = asteroids[i].get<Position>(); //####//
-            auto [cx, cy] = pos_to_cell(p); //####//
-            bins[cy*GX + cx].push_back(i); //####//
+        for (int i = 0; i < (int)asteroids.size(); ++i) {
+            if (!asteroids[i].has<Position>())
+                continue;
+            Position p = asteroids[i].get<Position>();
+            auto [cx, cy] = pos_to_cell(p);
+            bins[cy*GX + cx].push_back(i);
         }
     };
 
@@ -148,6 +158,15 @@ int main(int argc, char* argv[]) {
         .with<AsteroidTag>()
         .kind(flecs::PreUpdate)
         .each([](Accel& a){ a.ddx = 0.0; a.ddy = 0.0; });
+
+    // Start the energy tracker just before the simulation code starts
+    world.system<>()
+        .kind(flecs::PreUpdate)
+        .each([&]() {
+            // start once per frame
+            energy_tracker.start();
+        });
+
 
     // 1) Update the accelerations - KNN gravity using only current cell + 8 neighbours
     world.system<const Position, Accel, const Mass>()
@@ -208,6 +227,14 @@ int main(int argc, char* argv[]) {
             }
         });
 
+    // Stop the energy tracker just after the simulation code stops
+    // We do it this way to enable the systems being monitored to be changed without needing to be changed.
+    world.system<>()
+        .kind(flecs::PostUpdate)
+        .each([&]() {
+            auto r = energy_tracker.stop();
+        });
+
     // 2) Apply the accelerations
     world.system<Position, Velocity, const Accel>()
         .with<AsteroidTag>()
@@ -225,7 +252,7 @@ int main(int argc, char* argv[]) {
     std::cout << "\x1b[2J\x1b[?25l"; // Clear the screen and hide the cursor
     Viewport vp{100, 30, 0.6};
 
-    const int STEPS = 4000;
+    const int STEPS = 1000;
     const int SLEEP_MS = 16;
 
     for (int i = 0; i < STEPS; ++i) {
@@ -238,5 +265,9 @@ int main(int argc, char* argv[]) {
         std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_MS));
     }
     std::cout << "\x1b[?25h\n";  // Show the cursor again
+
+    // Reporting the information from the energy tracker
+    std::cout << energy_tracker.mkReport() << std::endl;
+
     return 0;
 }
