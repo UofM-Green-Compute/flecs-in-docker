@@ -15,7 +15,7 @@ struct Position { double x, y; };
 struct Velocity { double dx, dy; };
 struct Acceleration { double ddx, ddy; };
 struct Mass { double m; };
-struct ParticleTag {}; 
+struct ParticleIndex {int i; }; 
 
 // Constants
 int NO_PARTICLES = 5; 
@@ -26,10 +26,20 @@ static constexpr double HALF_HEIGHT = 20.0;           // half-height (domain y i
 static constexpr double BOX_W = 2.0 * HALF_WIDTH;    // full width
 static constexpr double BOX_H = 2.0 * HALF_HEIGHT;    // full height
 
-double CONST_H = 3; 
+// Mathematical constants
+double CONST_H = 3; // Parameter determining size of domain around particle
+
+// Physical constants
+double ALPHA = 0; 
+double BETA = 0; 
+double K_B = 1.380649 * pow(10,-23); // Units: m^2 kg s^-2 K^-1
+
+
 
 // Interpolant function (Gaussian)
-double W(double x) { return ( 1 / CONST_H * sqrt(M_PI) ) * exp(( - pow(x,2) / pow(CONST_H,2) )); }
+double W(double r) { return ( 1 / CONST_H * sqrt(M_PI) ) * exp(( - pow(r,2) / pow(CONST_H,2) )); }
+
+// std::vector<double> grad_W (double x) {}
 
 // Function to calculate vector distance between particles 
 std::vector<double> vector_distance(flecs::entity Particle, flecs::entity Particle_i){
@@ -44,20 +54,81 @@ std::vector<double> vector_distance(flecs::entity Particle, flecs::entity Partic
     return displacement; 
 }
 
-// Function to caluclate density rho 
-double density(std::vector<flecs::entity> Particles, int particle_index){
-    double density = 0; 
-    for (int i = 0; i < Particles.size()-1; i++) 
-    {
-        // calculate distance between current particle (particle_index) and ith particle
-        // add each new term to density 
-    }
-
+double absolute_distance(std::vector<double> displacement){
+    double sum = 0; 
+    for (int i = 0; i < displacement.size(); i++) { sum += displacement[i]*displacement[i]; }
+    return sqrt(sum); 
 }
 
-// Function to calculate force on particle a due to particle b
-std::vector<double> force(flecs::entity Particle, flecs::entity Particle_i){
+// Function to calculate temperature ???
+int T = 1; 
+
+// Function to caluclate density rho at the position of some particle
+double density(std::vector<flecs::entity> Particles, flecs::entity particle){
+    double Density = 0; 
+    int particle_index = particle.get<ParticleIndex>().i; 
+
+    for (int j=0; j<Particles.size()-1; j++)
+    {
+        std::vector<double> distance_vec = vector_distance(Particles[particle_index],Particles[j]); 
+        double R = absolute_distance(distance_vec); 
+        Density += Particles[j].get<Mass>().m * W(R) ; 
+    }
+    return Density; 
+}
+
+// Function to calculate pressure -- rho_i can be input into some equation of state to find pressure
+// Pressure calculated using the van der Waals equation of state 
+double vdw_pressure(std::vector<flecs::entity> Particles, flecs::entity particle){
+    double mass = particle.get<Mass>().m; 
+    double Density = density(Particles, particle); 
+
+    double alpha_bar = ALPHA / mass; 
+    double beta_bar = BETA / mass; 
+    double kb_bar = K_B / mass; 
+
+    return ( (Density * kb_bar * T) / (1 - beta_bar * Density) ) - alpha_bar * (Density*Density); 
+}
+
+// Function to calculate force on particle a due to all other particles       from to particle b
+std::vector<double> force(std::vector<flecs::entity> Particles, flecs::entity Particle_a){
     std::vector<double> Force; 
+
+    // Particle position
+    double x_a = Particle_a.get<Position>().x; 
+    double y_a = Particle_a.get<Position>().y;
+
+    // Particle mass
+    double m_a = Particle_a.get<Mass>().m; 
+
+    // Calculate pressure at a,b
+    double p_a = vdw_pressure(Particles, Particle_a);
+
+    // Calculate density at a
+    double rho_a = density(Particles, Particle_a);
+
+    for(int i = 0; i < Particles.size(); i++)
+    {
+        double x_b = Particles[i].get<Position>().x;
+        double y_b = Particles[i].get<Position>().y;
+
+        // Particle distance
+        std::vector<double> disp = vector_distance(Particle_a,Particles[i]); 
+        double R = absolute_distance(disp);
+
+        double m_b = Particles[i].get<Mass>().m;
+
+        double p_b = vdw_pressure(Particles, Particles[i]);
+
+        double rho_b = density(Particles, Particles[i]);
+
+        // make into one constant
+        double constant = (2 * m_a * m_b / pow(CONST_H,2) ) * ( p_b / (pow(rho_b,2)) + p_a / (pow(rho_a,2)));
+
+        Force[0] += constant * x_a - x_b * W(R); 
+        Force[1] += constant * y_a - y_b * W(R);
+    } 
+
     return Force; 
 }
 
@@ -86,7 +157,7 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < NO_PARTICLES; ++i) { 
         particles.push_back( 
             world.entity() 
-                .add<ParticleTag>() 
+                .add<ParticleIndex>(i) 
                 .set<Position>({UposX(rng), UposY(rng)}) 
                 .set<Velocity>({Uvel(rng), Uvel(rng)}) 
                 .set<Acceleration>({0.0, 0.0}) 
@@ -94,16 +165,20 @@ int main(int argc, char* argv[]) {
     } 
 
     world.system<Acceleration>()
-        .with<ParticleTag>()
+        .with<ParticleIndex>()
         //.kind(flecs::PreUpdate)
-        .each([&](Acceleration& a){
-            a.ddx = 0.0; a.ddy = 0.0; 
-            std::vector<double> vec = vector_distance(particles[0],particles[1]);
-            std::cout<<"Vector displacement: "<<vec[0]<<","<<vec[1]<<std::endl;
+        .each([&](Acceleration& a, Mass& m, ParticleIndex& index){
+
+        std::vector<double> Force = force(particles, particles[index.i]);
+
+        a.ddx = Force[0] / m.m;
+        a.ddy = Force[1] / m.m; 
+
+        std::cout<<"{"<<a.ddx<<","<<a.ddy<<"}"<<std::endl; 
+
         });
              
-
-    world.progress(); 
+    //world.progress(); 
 
 }
 
