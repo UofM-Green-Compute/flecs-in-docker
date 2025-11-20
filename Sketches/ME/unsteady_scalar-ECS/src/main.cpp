@@ -52,8 +52,8 @@ double fluid_function(double phi_left, double phi, double phi_right,
     double x_left, double x, double x_right)
 {
     double f;
-    f = - U*((phi_right + phi_left)/(x_right-x_left)) 
-    + (GAMMA/RHO) * (phi_right - 2 * phi + phi_left) / ((x_right - x) * (x - x_left));
+    f = - U*((phi_right - phi_left)/(x_right - x_left)) 
+    + ((GAMMA/RHO) * (phi_right - 2 * phi + phi_left)) / ((x_right - x) * (x - x_left));
     return f;
 }
 
@@ -74,11 +74,11 @@ int main(int argc, char *argv[]) {
     // Creates Phases which tell the program in which order to run the systems
     flecs::entity RungeKutta_1 = world.entity()
         .add(flecs::Phase); // This Phase calculates phihalf_predict
-
+    
     flecs::entity RungeKutta_2 = world.entity()
         .add(flecs::Phase) // This Phase calculates phihalf_correct
         .depends_on(RungeKutta_1);
-
+    
     flecs::entity RungeKutta_3 = world.entity()
         .add(flecs::Phase) // This Phase calculates phi_end_predict
         .depends_on(RungeKutta_2);
@@ -90,6 +90,7 @@ int main(int argc, char *argv[]) {
     flecs::entity Update = world.entity()
         .add(flecs::Phase) // This phase replaces phi_start with phi_end_correct
         .depends_on(RungeKutta_4);
+    
 
     // Create components inside the world
     world.component<Middle_Tag>();
@@ -121,11 +122,11 @@ int main(int argc, char *argv[]) {
     // Create non-boundary Nodes
     for (int index = 1; index < N-1; ++index) {
         double phi_initial;
-        phi_initial = linear_function(index*L/N, Start, End);
+        phi_initial = linear_function(index*L/(N-1), Start, End);
         nodes.push_back(
             world.entity()
                 .add<Middle_Tag>() 
-                .set<Position>({index*L/N})
+                .set<Position>({index*L/(N-1)})
                 .set<Index>({index})
                 .set<Phi_start>({phi_initial})
                 .set<Phihalf_predict>({0})
@@ -151,7 +152,7 @@ int main(int argc, char *argv[]) {
     world.system<Position, Index, Phi_start, Phihalf_predict>()
         .with<Middle_Tag>()
         .kind(RungeKutta_1)
-        .each([&](Position pos, Index index, Phi_start start, Phihalf_predict half){
+        .each([&](Position& pos, Index& index, Phi_start& start, Phihalf_predict& half){
             const Phi_start& startMinus = nodes[index.ind - 1].get<Phi_start>();
             const Phi_start& startPlus = nodes[index.ind + 1].get<Phi_start>();
 
@@ -160,17 +161,17 @@ int main(int argc, char *argv[]) {
 
             double function = fluid_function(startMinus.i, start.i, startPlus.i, 
                 posMinus.x, pos.x, posPlus.x);
-
             half.i = start.i + (TIME*function)/(2*STEPS);
+            std::cout << half.i << "\n";
+
         });
     
-    /*
     // This system finds and updates phihalf_correct
     world.system<Position, Index, Phi_start, Phihalf_predict, Phihalf_correct>()
         .with<Middle_Tag>()
         .kind(RungeKutta_2)
-        .each([&](Position pos, Index index, Phi_start start, 
-            Phihalf_predict predictor, Phihalf_correct corrector){
+        .each([&](Position& pos, Index& index, Phi_start& start, 
+            Phihalf_predict& predictor, Phihalf_correct& corrector){
 
             const Phihalf_predict& predictorMinus = nodes[index.ind - 1].get<Phihalf_predict>();
             const Phihalf_predict& predictorPlus = nodes[index.ind + 1].get<Phihalf_predict>();
@@ -180,16 +181,17 @@ int main(int argc, char *argv[]) {
 
             double function = fluid_function(predictorMinus.i, predictor.i, predictorPlus.i, 
                 posMinus.x, pos.x, posPlus.x);
-
+            
             corrector.i = start.i + (TIME*function)/(2*STEPS);
+            
         });
     
     // This system finds and updates phi_end_predict
     world.system<Position, Index, Phi_start, Phihalf_correct, Phi_end_predict>()
         .with<Middle_Tag>()
         .kind(RungeKutta_3)
-        .each([&](Position pos, Index index, Phi_start start, 
-            Phihalf_correct half, Phi_end_predict end){
+        .each([&](Position& pos, Index& index, Phi_start& start, 
+            Phihalf_correct& half, Phi_end_predict& end){
 
             const Phihalf_correct& halfMinus = nodes[index.ind - 1].get<Phihalf_correct>();
             const Phihalf_correct& halfPlus = nodes[index.ind + 1].get<Phihalf_correct>();
@@ -199,7 +201,7 @@ int main(int argc, char *argv[]) {
 
             double function = fluid_function(halfMinus.i, half.i, halfPlus.i, 
                 posMinus.x, pos.x, posPlus.x);
-
+            
             end.i = start.i + (TIME*function)/(2*STEPS);
         });
 
@@ -207,8 +209,8 @@ int main(int argc, char *argv[]) {
     world.system<Position, Index, Phi_start, Phihalf_predict, Phihalf_correct, Phi_end_predict, Phi_end_correct>()
         .with<Middle_Tag>()
         .kind(RungeKutta_4)
-        .each([&](Position pos, Index index, Phi_start start, Phihalf_correct halfPred,
-            Phihalf_correct halfCorr, Phi_end_predict endPred, Phi_end_correct endCorr){
+        .each([&](Position& pos, Index& index, Phi_start& start, Phihalf_predict& halfPred,
+            Phihalf_correct& halfCorr, Phi_end_predict& endPred, Phi_end_correct& endCorr){
             
             const Phi_start& startMinus = nodes[index.ind - 1].get<Phi_start>();
             const Phi_start& startPlus = nodes[index.ind + 1].get<Phi_start>();
@@ -236,7 +238,7 @@ int main(int argc, char *argv[]) {
             
             double functionEndPred = fluid_function(endPredMinus.i, endPred.i, endPredPlus.i, 
                 posMinus.x, pos.x, posPlus.x);
-
+            
             endCorr.i = start.i + (TIME*(functionStart + 2*functionHalfPred + 2*functionHalfCorr 
                 + functionEndPred))/(6*STEPS);
         });
@@ -245,11 +247,10 @@ int main(int argc, char *argv[]) {
     world.system<Phi_start, Phi_end_correct>()
         .with<Middle_Tag>()
         .kind(Update)
-        .each([](Phi_start initial, Phi_end_correct updated){
+        .each([](Phi_start& initial, Phi_end_correct& updated){
             initial.i = updated.i;
         });
-    */
-   
+
     // Set .txt file headers
     MyFile << "t, ";
     for (int x_step = 0; x_step < N; ++x_step) {
@@ -271,9 +272,10 @@ int main(int argc, char *argv[]) {
         const Phi_start& phi = nodes[N-1].get<Phi_start>();
         MyFile << phi.i << "\n";
 
-        world.progress();
+        
     }
     
+    world.progress();
     // Close Save File
     MyFile.close();
 }
