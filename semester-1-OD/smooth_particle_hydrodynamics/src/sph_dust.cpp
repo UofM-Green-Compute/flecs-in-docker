@@ -71,7 +71,7 @@ double density(std::vector<flecs::entity> Particles, flecs::entity particle){
     for (int j=0; j<Particles.size()-1; j++)
     {
         std::vector<double> distance_vec = vector_distance(Particles[particle_index],Particles[j]); 
-        double R = absolute_distance(distance_vec); 
+        double R = absolute_distance(distance_vec);  
         Density += Particles[j].get<Mass>().m * W(R) ; 
     }
     return Density; 
