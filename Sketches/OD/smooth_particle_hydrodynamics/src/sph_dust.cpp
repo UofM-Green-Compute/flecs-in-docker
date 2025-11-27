@@ -1,7 +1,13 @@
 /*
-Oluwole Delano
-13/11/25 
-Smooth Particle Hydrodynamics using the ECS Model, rendering in ASCII
+Oluwole Delano | 13/11/25 
+
+Simulating an ideal gas using smooth particle hydridynamics in ECS
+
+Limitations:
+    - Choice of h is arbitrary
+
+Tools:
+- Measure run time: https://www.geeksforgeeks.org/cpp/how-to-measure-time-taken-by-a-program-in-c/
 */
 
 #include <iostream>
@@ -9,6 +15,10 @@ Smooth Particle Hydrodynamics using the ECS Model, rendering in ASCII
 #include <vector>
 #include <random>
 #include <cmath>
+#include <thread>
+#include <chrono>
+#include <fstream> 
+#include <time.h> 
 
 // Initialise Components 
 struct Position { double x, y; };
@@ -18,38 +28,58 @@ struct Mass { double m; };
 struct ParticleIndex {int i; }; 
 
 // Constants
-int NO_PARTICLES = 5; 
+int NO_PARTICLES = 50; 
+const int STEPS = 4000; // Number of time steps
+double DT = 0.001;    // Time step
 
-// Walls of the domain 
-static constexpr double HALF_WIDTH = 40.0;           // half-width  (domain x in [-W, W])
-static constexpr double HALF_HEIGHT = 20.0;           // half-height (domain y in [-H, H])
-static constexpr double BOX_W = 2.0 * HALF_WIDTH;    // full width
-static constexpr double BOX_H = 2.0 * HALF_HEIGHT;    // full height
+// Walls of the box ----
+static constexpr int GX = 5;
+static constexpr int GY = 5;
 
 // Mathematical constants
-double CONST_H = 3; // Parameter determining size of domain around particle
-
+double CONST_H = 0.1; // Parameter determining size of domain around particle
 // Physical constants
 double ALPHA = 0; 
 double BETA = 0; 
 double K_B = 1.380649 * pow(10,-23); // Units: m^2 kg s^-2 K^-1
-
+double SIGMA = 10 / (7 * M_PI); // Normalisation constant for kernel in two dimensions
+int NO_DIMENSIONS = 2; 
 
 
 // Interpolant function (Gaussian)
-double W(double r) { return ( 1 / CONST_H * sqrt(M_PI) ) * exp(( - pow(r,2) / pow(CONST_H,2) )); }
+// double W(double r) { return ( 1 / CONST_H * sqrt(M_PI) ) * exp(( - pow(r,2) / pow(CONST_H,2) )); }
 
-// std::vector<double> grad_W (double x) {}
+// /*
+// Interpolant function 2 (Spline)
+double W(double r) { 
+    double q = r / CONST_H; 
+    double c = SIGMA / pow(CONST_H,NO_DIMENSIONS); 
+
+    if( (q >= 0) && (q <= 1) )
+    {
+        return c * (1 - ( (3/2) * pow(q,2) ) + ( (3/4) * pow(q,3) )); 
+    }
+    else if( (q >= 1) && (q <= 2) )
+    {
+        return c * ((1/4) * pow((2-q),3)); 
+    }
+    else {
+        return 0; 
+    }
+}
+// */
 
 // Function to calculate vector distance between particles 
 std::vector<double> vector_distance(flecs::entity Particle, flecs::entity Particle_i){
-    std::vector<double> displacement; 
+    std::vector<double> displacement{0.0,0.0}; 
 
     Position p = Particle.get<Position>();
     Position p_i = Particle_i.get<Position>();
 
-    displacement.push_back(p.x - p_i.x);
-    displacement.push_back(p.y - p_i.y);
+    displacement[0] = p.x - p_i.x;
+    displacement[1] = p.y - p_i.y; 
+    // displacement.push_back(p.x - p_i.x);
+    // displacement.push_back(p.y - p_i.y);
 
     return displacement; 
 }
@@ -61,14 +91,14 @@ double absolute_distance(std::vector<double> displacement){
 }
 
 // Function to calculate temperature ???
-int T = 1; 
+int T = 1000; 
 
 // Function to caluclate density rho at the position of some particle
 double density(std::vector<flecs::entity> Particles, flecs::entity particle){
     double Density = 0; 
     int particle_index = particle.get<ParticleIndex>().i; 
 
-    for (int j=0; j<Particles.size()-1; j++)
+    for (int j=0; j<Particles.size(); j++)
     {
         std::vector<double> distance_vec = vector_distance(Particles[particle_index],Particles[j]); 
         double R = absolute_distance(distance_vec);  
@@ -90,9 +120,9 @@ double vdw_pressure(std::vector<flecs::entity> Particles, flecs::entity particle
     return ( (Density * kb_bar * T) / (1 - beta_bar * Density) ) - alpha_bar * (Density*Density); 
 }
 
-// Function to calculate force on particle a due to all other particles       from to particle b
+// Function to calculate force on particle a due to all other particles      
 std::vector<double> force(std::vector<flecs::entity> Particles, flecs::entity Particle_a){
-    std::vector<double> Force; 
+    std::vector<double> Force = {0.0,0.0}; 
 
     // Particle position
     double x_a = Particle_a.get<Position>().x; 
@@ -101,38 +131,59 @@ std::vector<double> force(std::vector<flecs::entity> Particles, flecs::entity Pa
     // Particle mass
     double m_a = Particle_a.get<Mass>().m; 
 
-    // Calculate pressure at a,b
+    // Calculate pressure at a
     double p_a = vdw_pressure(Particles, Particle_a);
 
     // Calculate density at a
     double rho_a = density(Particles, Particle_a);
 
-    for(int i = 0; i < Particles.size(); i++)
+    for(int i = 0; i < Particles.size()-1; i++)
     {
-        double x_b = Particles[i].get<Position>().x;
-        double y_b = Particles[i].get<Position>().y;
+        
+        // Particle doesn't feel force from itself
+        if(!(Particle_a.get<ParticleIndex>().i == Particles[i].get<ParticleIndex>().i))
+        {
+            double x_b = Particles[i].get<Position>().x;
+            double y_b = Particles[i].get<Position>().y;
 
-        // Particle distance
-        std::vector<double> disp = vector_distance(Particle_a,Particles[i]); 
-        double R = absolute_distance(disp);
+            // Particle distance
+            std::vector<double> disp = vector_distance(Particle_a,Particles[i]); 
+            double R = absolute_distance(disp);
 
-        double m_b = Particles[i].get<Mass>().m;
+            double m_b = Particles[i].get<Mass>().m;
 
-        double p_b = vdw_pressure(Particles, Particles[i]);
+            double p_b = vdw_pressure(Particles, Particles[i]);
 
-        double rho_b = density(Particles, Particles[i]);
+            double rho_b = density(Particles, Particles[i]);
 
-        // make into one constant
-        double constant = (2 * m_a * m_b / pow(CONST_H,2) ) * ( p_b / (pow(rho_b,2)) + p_a / (pow(rho_a,2)));
+            // make into one constant
+            double constant = (2 * m_a * m_b / pow(CONST_H,2) ) * ( p_b / (pow(rho_b,2)) + p_a / (pow(rho_a,2)));
 
-        Force[0] += constant * x_a - x_b * W(R); 
-        Force[1] += constant * y_a - y_b * W(R);
+            Force[0] += constant * x_a - x_b * W(R); 
+            Force[1] += constant * y_a - y_b * W(R);
+        }
+
     } 
 
     return Force; 
 }
 
 int main(int argc, char* argv[]) {
+
+    // Start measuring run time of program
+    clock_t t; 
+    t = clock(); 
+
+    // Open file for writing
+    std::ofstream MyFile; 
+    MyFile.open("/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/smooth_particle_hydrodynamics/outputs/SPH_Dust.txt");
+    if (!MyFile.is_open())
+    {
+        std::cout<<"Error in creating file"<<std::endl; 
+        return 1; 
+    }
+    MyFile << STEPS << " | " << NO_PARTICLES <<std::endl;
+    MyFile << "Particle position x_1 (cm), Particle 1 position y_1 (cm) |  x_2,y_2 ; ..."<< std::endl;
 
     // Create the flecs world
     flecs::world world(argc,argv);
@@ -145,9 +196,9 @@ int main(int argc, char* argv[]) {
     // Tools for picking random numbers
     std::mt19937 rng( std::random_device{}()  ) ; // Initialise a random number generator with random device (for actual use)
 
-    std::uniform_real_distribution<double> UposX(-HALF_WIDTH, HALF_WIDTH); 
-    std::uniform_real_distribution<double> UposY(-HALF_HEIGHT, HALF_HEIGHT); 
-    std::uniform_real_distribution<double> Uvel(-0.4, 0.4); 
+    std::uniform_real_distribution<double> UposX(0, GX); 
+    std::uniform_real_distribution<double> UposY(0, GY); 
+    std::uniform_real_distribution<double> Uvel(-5, 5);
     std::uniform_real_distribution<double> Umass(0.5, 2.0); 
 
     // Initialise entities | Generate random values for initial conditions
@@ -157,28 +208,73 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < NO_PARTICLES; ++i) { 
         particles.push_back( 
             world.entity() 
-                .add<ParticleIndex>(i) 
+                .set<ParticleIndex>({i}) 
                 .set<Position>({UposX(rng), UposY(rng)}) 
                 .set<Velocity>({Uvel(rng), Uvel(rng)}) 
                 .set<Acceleration>({0.0, 0.0}) 
                 .set<Mass>({Umass(rng)})); 
+        MyFile << particles[i].get<Position>().x << "," << particles[i].get<Position>().y << "|" ;
     } 
+    MyFile<<""<<std::endl; 
 
-    world.system<Acceleration>()
-        .with<ParticleIndex>()
-        //.kind(flecs::PreUpdate)
-        .each([&](Acceleration& a, Mass& m, ParticleIndex& index){
+    // 2) Update Position, Velocity, and Acceleration
 
-        std::vector<double> Force = force(particles, particles[index.i]);
+    // Write to file
+    world.system<Position>()
+        .kind(flecs::PreUpdate)
+        .each([&](Position& p){
+            MyFile << p.x << "," << p.y << "|" ;
+        });
 
-        a.ddx = Force[0] / m.m;
-        a.ddy = Force[1] / m.m; 
+    // Check for collision
+    world.system<Position, Velocity, Acceleration>()
+        .kind(flecs::PreUpdate)
+        .each([&](Position& p, Velocity& v, Acceleration& a){
+     
+            int cx = int(std::floor(p.x)); // Round down to nearest integer
+            int cy = int(std::floor(p.y));
 
-        std::cout<<"{"<<a.ddx<<","<<a.ddy<<"}"<<std::endl; 
+            // Reflect particle for edge cases where p==+W or +H after rounding
+            if ( (cx < 0) || (cx >= GX) ) { v.dx = -v.dx; a.ddx = -a.ddx;}
+            if ( (cy < 0) || (cy >= GY) ) { v.dy = -v.dy; a.ddy = -a.ddy; } 
 
         });
-             
-    //world.progress(); 
+
+    // Update Acceleration
+    world.system<Position, Velocity, Acceleration, Mass, ParticleIndex>()
+        .each([&](Position& p, Velocity& v, Acceleration& a, Mass& m, ParticleIndex& index){
+        std::vector<double> Force = force(particles, particles[index.i]);
+        a.ddx = Force[0] / m.m;
+        a.ddy = Force[1] / m.m; 
+        });
+
+    // Update velocity
+    world.system<Velocity, Acceleration>()
+        .each([&](Velocity& v, Acceleration& a){
+            v.dx += a.ddx * DT;
+            v.dy += a.ddy * DT;
+        });
+
+    // Update position
+    world.system<Position, Velocity>()
+        .each([&](Position& p, Velocity& v){
+            p.x  += v.dx * DT;
+            p.y  += v.dy * DT;
+        });
+
+    for (int i = 0; i < STEPS; ++i) {
+
+        std::cout<<i<<std::endl; 
+
+        world.progress();
+        MyFile<<""<<std::endl; // End the line started in the write to file system
+
+    }
+
+    MyFile.close(); 
+
+    t = clock() - t; 
+    double time_taken = ((double)t) / CLOCKS_PER_SEC; 
+    std::cout<<"RUN TIME: "<<time_taken<<"s"<<std::endl; 
 
 }
-
