@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 import os
 
 L = 1 # Length of system
-Nx = 11 # Number of nodes
+Nx = 501 # Number of nodes
 Pe = 50  # Peclet Number
-Start = 0 # Conserved Quantity at start
-End = 1 # Conserved Quantity at end
+Start = 273.15 # Conserved Quantity at start
+End = 274.15 # Conserved Quantity at end
 
 # Analytical Model as derived in lab book
 def analytical_model(x, Pe_num, start, end):
@@ -34,17 +34,17 @@ plt.plot(x_model, y_model, color = "k", linestyle = "-", label = "Exact")
 plt.plot(x_computational, y_computational, color = "k", linestyle = "--", label = "Calculated")
 ax = plt.gca()
 # Set position and bounds of axes
-ax.spines['bottom'].set_position(('data', 0))
-ax.spines['top'].set_position(('data', 1))
-ax.spines['left'].set_bounds(0, End)
-ax.spines['right'].set_bounds(0, End)
+ax.spines['bottom'].set_position(('data', Start))
+ax.spines['top'].set_position(('data', End))
+ax.spines['left'].set_bounds(Start, End)
+ax.spines['right'].set_bounds(Start, End)
 # Set ticks in correct position
 ax.xaxis.set_ticks_position('bottom')
 ax.xaxis.set_label_position('bottom')
-ax.yaxis.set_ticks([tick for tick in ax.get_yticks() if (tick >= 0 and tick <= End)])
+ax.yaxis.set_ticks([tick for tick in ax.get_yticks() if (tick >= Start and tick <= End)])
 plt.xlim(min(x_model), max(x_model))
-plt.xlabel('x')
-plt.ylabel(r'$\phi$')
+plt.xlabel('x (m)')
+plt.ylabel('T (K)')
 #ax.yaxis.set_label_coords(-0.1, 0.6)
 plt.legend(loc='upper left', bbox_to_anchor=(0, 0.95))
 plt.savefig(save_pathpdf, dpi = 1200)
