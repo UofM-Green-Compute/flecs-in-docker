@@ -8,19 +8,19 @@ system which begins out of equilibrium
 #include <fstream> 
 #include <vector>
 
-// Sets time parameters
-int STEPS = 100;
-int TIME = 1;
-
 // Number of nodes in x-axis. Also equal to the length in unit of node distance
-const double L = 1; // Length
-const int N = 41; // Number of nodes
+const double L = 1; // Length (m)
+const int N = 501; // Number of nodes
 const int PE = 50; // Peclet Number
-const double RHO = 2; // Density
-const double U = 5; // Speed
+const double RHO = 2; // Density (kg m-3)
+const double U = 5; // Speed (m s-1)
 
 // Calculates Diffusivity
 double GAMMA = (RHO * U * L) / PE;
+
+// Sets time parameters
+double TIME = 0.5; //(s)
+int STEPS = TIME * 2 * static_cast<int>((2 * GAMMA * (N-1) * (N-1) )/ RHO);
 
 // Boundary Conditions
 double Start = 0;
@@ -162,8 +162,6 @@ int main(int argc, char *argv[]) {
             double function = fluid_function(startMinus.i, start.i, startPlus.i, 
                 posMinus.x, pos.x, posPlus.x);
             half.i = start.i + (TIME*function)/(2*STEPS);
-            std::cout << half.i << "\n";
-
         });
     
     // This system finds and updates phihalf_correct
@@ -183,7 +181,6 @@ int main(int argc, char *argv[]) {
                 posMinus.x, pos.x, posPlus.x);
             
             corrector.i = start.i + (TIME*function)/(2*STEPS);
-            
         });
     
     // This system finds and updates phi_end_predict
@@ -263,19 +260,20 @@ int main(int argc, char *argv[]) {
     
     // Run through systems every time step
     for (int t_step = 0; t_step <= STEPS; ++t_step) {
+        if (t_step != 0) {
+                world.progress();
+            }
+        std::cout << t_step << "\n";
         // Saves Data to a .txt file
-        MyFile << t_step << ", ";
+        MyFile << static_cast<double>(t_step*TIME)/STEPS << ", ";
         for (int index = 0; index < N-1; ++index) {
             const Phi_start& phi = nodes[index].get<Phi_start>();
             MyFile << phi.i << ", ";
         }
         const Phi_start& phi = nodes[N-1].get<Phi_start>();
         MyFile << phi.i << "\n";
-
-        
     }
-    
-    world.progress();
+
     // Close Save File
     MyFile.close();
 }

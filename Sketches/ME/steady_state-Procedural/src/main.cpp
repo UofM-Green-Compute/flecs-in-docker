@@ -9,7 +9,7 @@ solved analytically.
 #include <cmath>
 
 const double L = 1;   // Length
-const double N = 11;  // Number of nodes
+const double N = 501;  // Number of nodes
 const int PE = 50;    // Peclet Number
 const double RHO = 2; // Density
 const double U = 5;   // Speed
@@ -18,8 +18,8 @@ const double U = 5;   // Speed
 double GAMMA = (RHO * U * L) / PE;
 
 // Boundary Conditions
-double START = 0;
-double END = 1;
+double START = 273.15;
+double END = 274.15;
 
 double west_function(double left, double centre, double right){
   double A;
@@ -43,9 +43,9 @@ void matrix_filling(
     std::vector<double>& Q
 ){
     phi.push_back(START);
-    for(int i = 1; i <= N-1; ++i) {
-    double A_W = west_function((i-1)*L/N, i*L/N, (i+1)*L/N);
-    double A_E = east_function((i-1)*L/N, i*L/N, (i+1)*L/N);
+    for(int i = 1; i <= N-2; ++i) {
+    double A_W = west_function((i-1)*L/(N-1), i*L/(N-1), (i+1)*L/(N-1));
+    double A_E = east_function((i-1)*L/(N-1), i*L/(N-1), (i+1)*L/(N-1));
     // Updates Matrix Diagonal
     diagonal.push_back(-A_W-A_E);
     // Initialize value of conserved Quantity
@@ -54,7 +54,7 @@ void matrix_filling(
     if (i == 1) {   
         east.push_back(A_E);
         Q.push_back(-A_W * START);
-    } else if (i == N-1) {
+    } else if (i == N-2) {
         west.push_back(A_W);
         Q.push_back(-A_E * END);
     } else {
@@ -87,8 +87,8 @@ void matrix_solving(
                 west[i-1]*Q[i-1]) / (diagonal[i] - west[i-1]*east[i-1]);
         }
     }
-    for(int i = N - 1; i >= 1; --i) {
-        if (i == N - 1 ) {
+    for(int i = N - 2; i >= 1; --i) {
+        if (i == N - 2 ) {
             phi[i] = Q[i-1];
         } else {
             phi[i] = Q[i-1] - east[i-1] * phi[i+1];
@@ -132,8 +132,8 @@ int main() {
         east_steady, 
         Q_steady);
     
-    for (int i = 0; i<=N; ++i) {
-        MyFile << i*L/N << ", " << phi_steady[i] << std::endl; 
+    for (int i = 0; i<=N-1; ++i) {
+        MyFile << i*L/(N-1) << ", " << phi_steady[i] << std::endl; 
     }
     MyFile.close();
 }
