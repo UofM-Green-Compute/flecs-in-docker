@@ -1,10 +1,14 @@
 /*
 Oluwole Delano | 13/11/25 
-
 Simulating an ideal gas using smooth particle hydridynamics in ECS
 
-Limitations:
-    - Choice of h is arbitrary
+** Questions ** :
+- Should I incluide "self" particle in density sums? 
+  When self particle is included in force sums it leads to weird behaviour (strange atteactor)
+
+To add:
+- Sample initial velocities from Maxwell Boltzman (Metropolis Algorithm Advanced Statistics)
+- Model particle interactions: Lenard Jones potential --- do i need to do this? Does EOS do this for me?
 
 Tools:
 - Measure run time: https://www.geeksforgeeks.org/cpp/how-to-measure-time-taken-by-a-program-in-c/
@@ -19,6 +23,7 @@ Tools:
 #include <chrono>
 #include <fstream> 
 #include <time.h> 
+#include <algorithm>
 
 // Initialise Components 
 struct Position { double x, y; };
@@ -28,22 +33,23 @@ struct Mass { double m; };
 struct ParticleIndex {int i; }; 
 
 // Constants
-int NO_PARTICLES = 50; 
+int NO_PARTICLES = 20; 
 const int STEPS = 4000; // Number of time steps
-double DT = 0.001;    // Time step
+double dt = 0.001;    // Time step
 
 // Walls of the box ----
 static constexpr int GX = 5;
 static constexpr int GY = 5;
 
 // Mathematical constants
-double CONST_H = 0.1; // Parameter determining size of domain around particle
+double CONST_H = 0.1;                 // Parameter determining size of domain around particle
 // Physical constants
-double ALPHA = 0; 
-double BETA = 0; 
-double K_B = 1.380649 * pow(10,-23); // Units: m^2 kg s^-2 K^-1
-double SIGMA = 10 / (7 * M_PI); // Normalisation constant for kernel in two dimensions
+double ALPHA = 0;                     // Van-der-waals coefficient
+double BETA = 0;                      // Van-der-waals coefficient
+double K_B = 1.380649 * pow(10,-23);  // Units: m^2 kg s^-2 K^-1
+double SIGMA = 10 / (7 * M_PI);       // Normalisation constant for kernel in two dimensions
 int NO_DIMENSIONS = 2; 
+double COURANT_NO = 1;                // Courant number
 
 
 // Interpolant function (Gaussian)
@@ -91,7 +97,7 @@ double absolute_distance(std::vector<double> displacement){
 }
 
 // Function to calculate temperature ???
-int T = 1000; 
+int T = 100; 
 
 // Function to caluclate density rho at the position of some particle
 double density(std::vector<flecs::entity> Particles, flecs::entity particle){
@@ -107,9 +113,9 @@ double density(std::vector<flecs::entity> Particles, flecs::entity particle){
     return Density; 
 }
 
-// Function to calculate pressure -- rho_i can be input into some equation of state to find pressure
-// Pressure calculated using the van der Waals equation of state 
+// Equations of state -- rho_i can be input into some equation of state to find pressure
 double vdw_pressure(std::vector<flecs::entity> Particles, flecs::entity particle){
+    // Van der Waals equation of state to find pressure
     double mass = particle.get<Mass>().m; 
     double Density = density(Particles, particle); 
 
@@ -139,7 +145,6 @@ std::vector<double> force(std::vector<flecs::entity> Particles, flecs::entity Pa
 
     for(int i = 0; i < Particles.size()-1; i++)
     {
-        
         // Particle doesn't feel force from itself
         if(!(Particle_a.get<ParticleIndex>().i == Particles[i].get<ParticleIndex>().i))
         {
@@ -162,9 +167,7 @@ std::vector<double> force(std::vector<flecs::entity> Particles, flecs::entity Pa
             Force[0] += constant * x_a - x_b * W(R); 
             Force[1] += constant * y_a - y_b * W(R);
         }
-
     } 
-
     return Force; 
 }
 
@@ -183,7 +186,7 @@ int main(int argc, char* argv[]) {
         return 1; 
     }
     MyFile << STEPS << " | " << NO_PARTICLES <<std::endl;
-    MyFile << "Particle position x_1 (cm), Particle 1 position y_1 (cm) |  x_2,y_2 ; ..."<< std::endl;
+    MyFile << "Particle position x_1 (cm), Particle 1 position y_1 (cm), velocity_x, velocity_y |  x_2,y_2,v_x,v_y ; ..."<< std::endl;
 
     // Create the flecs world
     flecs::world world(argc,argv);
@@ -213,32 +216,64 @@ int main(int argc, char* argv[]) {
                 .set<Velocity>({Uvel(rng), Uvel(rng)}) 
                 .set<Acceleration>({0.0, 0.0}) 
                 .set<Mass>({Umass(rng)})); 
-        MyFile << particles[i].get<Position>().x << "," << particles[i].get<Position>().y << "|" ;
     } 
-    MyFile<<""<<std::endl; 
-
-    // 2) Update Position, Velocity, and Acceleration
 
     // Write to file
-    world.system<Position>()
+    world.system<Position, Velocity>()
         .kind(flecs::PreUpdate)
-        .each([&](Position& p){
-            MyFile << p.x << "," << p.y << "|" ;
+        .each([&](Position& p, Velocity &v){
+            MyFile << p.x << "," << p.y << "," << v.dx << "," << v.dy << "|" ;
         });
 
     // Check for collision
     world.system<Position, Velocity, Acceleration>()
         .kind(flecs::PreUpdate)
         .each([&](Position& p, Velocity& v, Acceleration& a){
-     
+
             int cx = int(std::floor(p.x)); // Round down to nearest integer
             int cy = int(std::floor(p.y));
 
             // Reflect particle for edge cases where p==+W or +H after rounding
             if ( (cx < 0) || (cx >= GX) ) { v.dx = -v.dx; a.ddx = -a.ddx;}
             if ( (cy < 0) || (cy >= GY) ) { v.dy = -v.dy; a.ddy = -a.ddy; } 
-
         });
+
+    // Calculate time step
+    world.system<>()
+        .kind(flecs::PreUpdate)
+        .each([&](){
+        double time_step = 0; 
+
+        // Particle acceleration constraint | finding min( h / sqrt(F_i) )
+        double t_f = 0;
+        for(int i = 0; i < particles.size(); i++){
+            std::vector<double> Force = force(particles, particles[i]);
+            double abs_force = absolute_distance(Force); // Function to calculate |r| can be used similarly for F
+            double t1 = CONST_H / sqrt(abs_force); 
+            
+            if (i == 0) { t_f = t1; }
+            else if(t1<t_f) { t_f = t1; }
+        }
+
+        // CFL condition
+        double t_cx = 0;
+        double t_cy = 0;
+        for(int i = 0; i < particles.size(); i++){
+            double t2 = ( COURANT_NO * CONST_H ) / abs(particles[i].get<Velocity>().dx) ; 
+            if (i == 0) { t_cx = t2; }
+            else if(t2<t_cx) { t_cx = t2; }
+        }
+        for(int i = 0; i < particles.size(); i++){
+            double t2 = ( COURANT_NO * CONST_H ) / abs(particles[i].get<Velocity>().dy) ; 
+            if (i == 0) { t_cy = t2; }
+            else if(t2<t_cy) { t_cy = t2; }
+        }
+        double t_c = std::min(t_cx,t_cy); 
+
+        dt = 0.3 * std::min(t_f,t_c); 
+        
+        });
+    
 
     // Update Acceleration
     world.system<Position, Velocity, Acceleration, Mass, ParticleIndex>()
@@ -251,15 +286,15 @@ int main(int argc, char* argv[]) {
     // Update velocity
     world.system<Velocity, Acceleration>()
         .each([&](Velocity& v, Acceleration& a){
-            v.dx += a.ddx * DT;
-            v.dy += a.ddy * DT;
+            v.dx += a.ddx * dt;
+            v.dy += a.ddy * dt;
         });
 
     // Update position
     world.system<Position, Velocity>()
         .each([&](Position& p, Velocity& v){
-            p.x  += v.dx * DT;
-            p.y  += v.dy * DT;
+            p.x  += v.dx * dt;
+            p.y  += v.dy * dt;
         });
 
     for (int i = 0; i < STEPS; ++i) {

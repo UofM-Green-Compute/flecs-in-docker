@@ -18,6 +18,8 @@ for i,row in enumerate(file):
 
         x_matrix = np.zeros((no_steps+1,no_particles))
         y_matrix = np.zeros((no_steps+1,no_particles))
+        x_vel_matrix = np.zeros((no_steps+1,no_particles))
+        y_vel_matrix = np.zeros((no_steps+1,no_particles))
 
     elif(i == 1):
         print(row)
@@ -29,9 +31,12 @@ for i,row in enumerate(file):
             if(pos_vector[0] != "\n" and pos_vector[0] != ""):
                 x_matrix[i-2][j] = float(pos_vector[0])
                 y_matrix[i-2][j] = float(pos_vector[1])
+                x_vel_matrix[i-2][j] = float(pos_vector[2])
+                y_vel_matrix[i-2][j] = float(pos_vector[3])
 
 # Graph formatting
 fig, ax_ani = plt.subplots()
+fig2, ax_hist = plt.subplots()
 plt.suptitle("Coupled Oscillator")
 
 ax_ani.set_title("Particles")
@@ -42,16 +47,29 @@ fig.tight_layout()
 
 # Animation
 graph_particles, = ax_ani.plot([],[],'o',color="Red",label = 'Ideal')
+_, _, graph_hist, = ax_hist.hist([],bins=50,density=True)
 
 def particle(frame):
 
     state_x = x_matrix[frame,:]
     state_y = y_matrix[frame,:]
-    
+
     graph_particles.set_data(state_x, state_y)
 
     return graph_particles
 
-ani3 = FuncAnimation(fig, particle, frames=no_steps, interval=1)
+def histogram(frame):
+
+    state_vx = x_vel_matrix[frame,:]
+    state_vy = y_vel_matrix[frame,:]
+    speed = np.sqrt( state_vx**2 + state_vy**2 )
+
+    ax_hist.cla()
+    _, _, graph_hist, = ax_hist.hist(speed,bins=50,fc="green",density=True)
+
+    return graph_hist
+
+ani = FuncAnimation(fig, particle, frames=no_steps, interval=1)
+#ani2 = FuncAnimation(fig2, histogram, frames=no_steps, interval=1)
 
 plt.show()
