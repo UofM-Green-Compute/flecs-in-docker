@@ -4,7 +4,7 @@ Simulating an ideal gas using smooth particle hydridynamics in ECS
 
 ** Questions ** :
 - Should I incluide "self" particle in density sums? 
-  When self particle is included in force sums it leads to weird behaviour (strange atteactor)
+  When self particle is included in force sums it leads to weird behaviour (strange attractor)
 
 To add:
 - Sample initial velocities from Maxwell Boltzman (Metropolis Algorithm Advanced Statistics)
@@ -35,15 +35,19 @@ struct ParticleIndex {int i; };
 // Constants
 int NO_PARTICLES = 20; 
 const int STEPS = 4000; // Number of time steps
-double dt = 0.001;    // Time step
+double DT = 0.001;    // Time step
+double dt = 0; 
 
 // Walls of the box ----
 static constexpr int GX = 5;
 static constexpr int GY = 5;
+static constexpr int GX2 = 5;
+int SLIT_WIDTH = 1; 
 
 // Mathematical constants
 double CONST_H = 0.1;                 // Parameter determining size of domain around particle
 // Physical constants
+int T = 100;                          // Temperature 
 double ALPHA = 0;                     // Van-der-waals coefficient
 double BETA = 0;                      // Van-der-waals coefficient
 double K_B = 1.380649 * pow(10,-23);  // Units: m^2 kg s^-2 K^-1
@@ -52,12 +56,11 @@ int NO_DIMENSIONS = 2;
 double COURANT_NO = 1;                // Courant number
 
 
-// Interpolant function (Gaussian)
-// double W(double r) { return ( 1 / CONST_H * sqrt(M_PI) ) * exp(( - pow(r,2) / pow(CONST_H,2) )); }
+// Interpolant function (Gaussian) -- Monaghan 1992 Equation 2.6
+double gaussian_W(double r) { return ( 1 / CONST_H * sqrt(M_PI) ) * exp(( - pow(r,2) / pow(CONST_H,2) )); }
 
-// /*
-// Interpolant function 2 (Spline)
-double W(double r) { 
+// Interpolant function 2 (Spline) -- Monaghan 1992 Section 7
+double spline_W(double r) { 
     double q = r / CONST_H; 
     double c = SIGMA / pow(CONST_H,NO_DIMENSIONS); 
 
@@ -73,7 +76,6 @@ double W(double r) {
         return 0; 
     }
 }
-// */
 
 // Function to calculate vector distance between particles 
 std::vector<double> vector_distance(flecs::entity Particle, flecs::entity Particle_i){
@@ -82,10 +84,8 @@ std::vector<double> vector_distance(flecs::entity Particle, flecs::entity Partic
     Position p = Particle.get<Position>();
     Position p_i = Particle_i.get<Position>();
 
-    displacement[0] = p.x - p_i.x;
-    displacement[1] = p.y - p_i.y; 
-    // displacement.push_back(p.x - p_i.x);
-    // displacement.push_back(p.y - p_i.y);
+    displacement.push_back(p.x - p_i.x);
+    displacement.push_back(p.y - p_i.y);
 
     return displacement; 
 }
@@ -96,9 +96,6 @@ double absolute_distance(std::vector<double> displacement){
     return sqrt(sum); 
 }
 
-// Function to calculate temperature ???
-int T = 100; 
-
 // Function to caluclate density rho at the position of some particle
 double density(std::vector<flecs::entity> Particles, flecs::entity particle){
     double Density = 0; 
@@ -108,9 +105,50 @@ double density(std::vector<flecs::entity> Particles, flecs::entity particle){
     {
         std::vector<double> distance_vec = vector_distance(Particles[particle_index],Particles[j]); 
         double R = absolute_distance(distance_vec);  
-        Density += Particles[j].get<Mass>().m * W(R) ; 
+        Density += Particles[j].get<Mass>().m * spline_W(R) ; 
     }
     return Density; 
+}
+
+// Gradient of Gaussian Interpolant Function
+std::vector<double> grad_gaussian_W(flecs::entity p_a, flecs::entity p_b) 
+{ 
+    std::vector<double> vec_distance = vector_distance(p_a,p_b); 
+    double R = absolute_distance(vec_distance); 
+    std::vector<double> grad; 
+
+    for(int i = 0; i < vec_distance.size(); i++) { grad.push_back( (2 / (CONST_H*CONST_H)) * vec_distance[i] * gaussian_W(R)); }
+
+    return grad; 
+} 
+
+// Gradient of Spline Interpolant Function
+std::vector<double> grad_spline_W(flecs::entity p_a, flecs::entity p_b)
+{
+    std::vector<double> vec_distance = vector_distance(p_a,p_b); 
+    double R = absolute_distance(vec_distance); 
+
+    double q = R / CONST_H; 
+    double c = SIGMA / pow(CONST_H,NO_DIMENSIONS); 
+
+    std::vector<double> grad;
+
+    if( (q >= 0) && (q <= 1) )
+    {
+        for(int i = 0; i < vec_distance.size(); i++) 
+        { grad.push_back( (3 / (CONST_H*CONST_H)) * (((3*R) / (4*CONST_H)) - 1) * vec_distance[i] ); }
+    }
+    else if( (q >= 1) && (q <= 2) )
+    {
+        for(int i = 0; i < vec_distance.size(); i++) 
+        { grad.push_back( (-3 / 4) * ((2-q)*(2-q)) * vec_distance[i] ); }
+    }
+    else {
+        for(int i = 0; i < vec_distance.size(); i++) 
+        { grad.push_back(0); }
+    }
+
+    return grad; 
 }
 
 // Equations of state -- rho_i can be input into some equation of state to find pressure
@@ -162,10 +200,12 @@ std::vector<double> force(std::vector<flecs::entity> Particles, flecs::entity Pa
             double rho_b = density(Particles, Particles[i]);
 
             // make into one constant
-            double constant = (2 * m_a * m_b / pow(CONST_H,2) ) * ( p_b / (pow(rho_b,2)) + p_a / (pow(rho_a,2)));
+            double constant = (m_a * m_b) * ( p_b / (pow(rho_b,2)) + p_a / (pow(rho_a,2)));
 
-            Force[0] += constant * x_a - x_b * W(R); 
-            Force[1] += constant * y_a - y_b * W(R);
+            std::vector<double> grad_W = grad_spline_W(Particle_a, Particles[i]); 
+
+            Force[0] += constant * grad_W[0]; 
+            Force[1] += constant * grad_W[1];
         }
     } 
     return Force; 
@@ -231,17 +271,22 @@ int main(int argc, char* argv[]) {
         .each([&](Position& p, Velocity& v, Acceleration& a){
 
             int cx = int(std::floor(p.x)); // Round down to nearest integer
+            int upx = int(std::ceil(p.x)); 
             int cy = int(std::floor(p.y));
 
             // Reflect particle for edge cases where p==+W or +H after rounding
-            if ( (cx < 0) || (cx >= GX) ) { v.dx = -v.dx; a.ddx = -a.ddx;}
+            if ( ((cx < 0) || (cx >= GX+GX2)) ) { v.dx = -v.dx; a.ddx = -a.ddx;}
+            if ( ((cx >= GX && v.dx > 0) || (upx <= GX && v.dx < 0)) && ( (p.y < (GX/2 - SLIT_WIDTH/2)) 
+            || (p.y > (GX/2 + SLIT_WIDTH/2))) ) { v.dx = -v.dx; a.ddx = -a.ddx;}
             if ( (cy < 0) || (cy >= GY) ) { v.dy = -v.dy; a.ddy = -a.ddy; } 
+            
         });
 
-    // Calculate time step
+    // Check that time step isn't too large
     world.system<>()
         .kind(flecs::PreUpdate)
         .each([&](){
+
         double time_step = 0; 
 
         // Particle acceleration constraint | finding min( h / sqrt(F_i) )
@@ -271,7 +316,8 @@ int main(int argc, char* argv[]) {
         double t_c = std::min(t_cx,t_cy); 
 
         dt = 0.3 * std::min(t_f,t_c); 
-        
+
+        if(DT > dt) { std::cout<<"ERROR: Time step too large. Decrease by "<<(DT-dt)<<std::endl; }
         });
     
 
@@ -286,15 +332,15 @@ int main(int argc, char* argv[]) {
     // Update velocity
     world.system<Velocity, Acceleration>()
         .each([&](Velocity& v, Acceleration& a){
-            v.dx += a.ddx * dt;
-            v.dy += a.ddy * dt;
+            v.dx += a.ddx * DT;
+            v.dy += a.ddy * DT;
         });
 
     // Update position
     world.system<Position, Velocity>()
         .each([&](Position& p, Velocity& v){
-            p.x  += v.dx * dt;
-            p.y  += v.dy * dt;
+            p.x  += v.dx * DT;
+            p.y  += v.dy * DT;
         });
 
     for (int i = 0; i < STEPS; ++i) {
