@@ -31,18 +31,19 @@ struct Velocity { double dx, dy; };
 struct Acceleration { double ddx, ddy; };
 struct Mass { double m; };
 struct ParticleIndex {int i; }; 
+struct Box {int k; }; 
 
 // Constants
 int NO_PARTICLES = 20; 
-const int STEPS = 4000; // Number of time steps
+const int STEPS = 10000; // Number of time steps
 double DT = 0.001;    // Time step
 double dt = 0; 
 
 // Walls of the box ----
-static constexpr int GX = 5;
-static constexpr int GY = 5;
-static constexpr int GX2 = 5;
-int SLIT_WIDTH = 1; 
+static constexpr double GX = 5;
+static constexpr double GY = 5;
+static constexpr double GX2 = 5;
+double SLIT_WIDTH = 1; 
 
 // Mathematical constants
 double CONST_H = 0.1;                 // Parameter determining size of domain around particle
@@ -235,6 +236,7 @@ int main(int argc, char* argv[]) {
     world.component<Velocity>(); 
     world.component<Acceleration>(); 
     world.component<Mass>(); 
+    world.component<Box>(); 
 
     // Tools for picking random numbers
     std::mt19937 rng( std::random_device{}()  ) ; // Initialise a random number generator with random device (for actual use)
@@ -255,7 +257,8 @@ int main(int argc, char* argv[]) {
                 .set<Position>({UposX(rng), UposY(rng)}) 
                 .set<Velocity>({Uvel(rng), Uvel(rng)}) 
                 .set<Acceleration>({0.0, 0.0}) 
-                .set<Mass>({Umass(rng)})); 
+                .set<Mass>({Umass(rng)})
+                .set<Box>({0})); 
     } 
 
     // Write to file
@@ -266,18 +269,25 @@ int main(int argc, char* argv[]) {
         });
 
     // Check for collision
-    world.system<Position, Velocity, Acceleration>()
+    world.system<Position, Velocity, Acceleration, Box>()
         .kind(flecs::PreUpdate)
-        .each([&](Position& p, Velocity& v, Acceleration& a){
+        .each([&](Position& p, Velocity& v, Acceleration& a, Box& b){
 
             int cx = int(std::floor(p.x)); // Round down to nearest integer
             int upx = int(std::ceil(p.x)); 
             int cy = int(std::floor(p.y));
+            double x_tolerance = v.dx * DT; 
 
-            // Reflect particle for edge cases where p==+W or +H after rounding
+            // Reflect particle for edge cases where position is at a wall after rounding
             if ( ((cx < 0) || (cx >= GX+GX2)) ) { v.dx = -v.dx; a.ddx = -a.ddx;}
-            if ( ((cx >= GX && v.dx > 0) || (upx <= GX && v.dx < 0)) && ( (p.y < (GX/2 - SLIT_WIDTH/2)) 
-            || (p.y > (GX/2 + SLIT_WIDTH/2))) ) { v.dx = -v.dx; a.ddx = -a.ddx;}
+
+            if ( b.k == 0 && ((p.y < (GY/2 - SLIT_WIDTH/2)) || (p.y > (GY/2 + SLIT_WIDTH/2))) )
+            { if ( (cx >= GX) )  { v.dx = -v.dx; a.ddx = -a.ddx;} }
+            else if (b.k == 1 && !( (p.y > (GY/2 - SLIT_WIDTH/2)) && (p.y < (GY/2 + SLIT_WIDTH/2)) ) )
+            { if ( (upx <= GX) )  { v.dx = -v.dx; a.ddx = -a.ddx;} }
+            else 
+            { if (p.x > GX) {b.k = 1; } }
+
             if ( (cy < 0) || (cy >= GY) ) { v.dy = -v.dy; a.ddy = -a.ddy; } 
             
         });
@@ -345,7 +355,7 @@ int main(int argc, char* argv[]) {
 
     for (int i = 0; i < STEPS; ++i) {
 
-        std::cout<<i<<std::endl; 
+        // std::cout<<i<<std::endl; 
 
         world.progress();
         MyFile<<""<<std::endl; // End the line started in the write to file system
