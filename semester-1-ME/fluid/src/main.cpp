@@ -12,9 +12,9 @@ This code looks at the dynamical evolution of a compressible
 const double nodeDistance = 1e-3; // node distance in M
 
 const double W = 1;
-const int Nx = 5; // Number of from left wall to middle wall and from middle wall to right wall
-const int Ny = 5; // Number of nodes from bottom wall to top wall
-const int Nh = 1;  // Width of hole in middle wall in units of node distance
+const int Nx = 500; // Number of from left wall to middle wall and from middle wall to right wall
+const int Ny = 500; // Number of nodes from bottom wall to top wall
+const int Nh = 100;  // Width of hole in middle wall in units of node distance
 const double TIMESTEP = 0.00001;
 const int NUMBERSTEPS = 1000;
 const double TIME = NUMBERSTEPS*TIMESTEP;
@@ -193,9 +193,9 @@ int main(int argc, char *argv[]) {
     nodes.reserve(Nx*Ny); // Create the space
     
     // Create non-boundary Nodes
-    for (int n = 0; n <= Nx; ++n) {
+    for (int n = 0; n < 2*Nx; ++n) {
         nodes.push_back({});
-        for (int m = 0; m<=Ny; ++m) {
+        for (int m = 0; m < Ny; ++m) {
             nodes[n].push_back(
                 world.entity()
                     .set<Position>({n, m})
@@ -212,7 +212,7 @@ int main(int argc, char *argv[]) {
                     .set<FunctionsFourth>({0, 0, 0})
 
             );
-            if (n <= L/2) {
+            if (n < L/2) {
                 nodes[n][m].set<DensityStart>({RhoStart});
                 if (n == 0) {
                     nodes[n][m].add<LeftWall>();
@@ -223,10 +223,10 @@ int main(int argc, char *argv[]) {
                 if (m == 0) {
                     nodes[n][m].add<LowerWall>();
                 }
-                if (n == (L/2 - 1) && m >=0 && m <= ((Ny-Nh)/2 - 1)) {
+                if (n == (L/2 - 1) && m <= ((Ny-Nh)/2 - 1)) {
                     nodes[n][m].add<RightWall>();
                 }
-                if (n == (L/2 - 1) && m >= ((Ny+Nh)/2 - 1) && m <= (Ny-1)) {
+                if (n == (L/2 - 1) && m >= ((Ny+Nh)/2)) {
                     nodes[n][m].add<RightWall>();
                 }
             } else {
@@ -240,10 +240,10 @@ int main(int argc, char *argv[]) {
                 if (m == 0) {
                     nodes[n][m].add<LowerWall>();
                 }
-                if (n == (L/2) && m <= 0 && m <= ((Ny-Nh)/2 - 1)) {
+                if (n == (L/2) && m <= ((Ny-Nh)/2 - 1)) {
                     nodes[n][m].add<LeftWall>();
                 }
-                if (n == (L/2) && m <= ((Ny+Nh)/2 - 1) && m <= (Ny-1)) {
+                if (n == (L/2) && m >= ((Ny+Nh)/2)) {
                     nodes[n][m].add<LeftWall>();
                 }
             }  
@@ -628,9 +628,9 @@ int main(int argc, char *argv[]) {
     for (int x = 0; x < 2*Nx; ++x) {
         for (int y = 0; y < Ny; ++y) {
             if (x == 2*Nx-1 && y == Ny-1) {
-                MyFile_u << "x" << x << "," << "y" << y << "\n";
+                MyFile_u << "x" << x << "y" << y << "\n";
             } else {
-                MyFile_u << "x" << x << "," << "y" << y << ";";
+                MyFile_u << "x" << x << "y" << y << ",";
             }
         }
     }
