@@ -12,11 +12,11 @@ This code looks at the dynamical evolution of a compressible
 const double nodeDistance = 1e-3; // node distance in M
 
 const double W = 1;
-const int Nx = 500; // Number of from left wall to middle wall and from middle wall to right wall
-const int Ny = 500; // Number of nodes from bottom wall to top wall
-const int Nh = 100;  // Width of hole in middle wall in units of node distance
-const double TIMESTEP = 0.0001;
-const int NUMBERSTEPS = 10000;
+const int Nx = 5; // Number of from left wall to middle wall and from middle wall to right wall
+const int Ny = 5; // Number of nodes from bottom wall to top wall
+const int Nh = 1;  // Width of hole in middle wall in units of node distance
+const double TIMESTEP = 0.00001;
+const int NUMBERSTEPS = 1000;
 const double TIME = NUMBERSTEPS*TIMESTEP;
 
 
@@ -223,10 +223,10 @@ int main(int argc, char *argv[]) {
                 if (m == 0) {
                     nodes[n][m].add<LowerWall>();
                 }
-                if (n == (L/2 - 1) && 0 <= m <= ((Ny-Nh)/2 - 1)) {
+                if (n == (L/2 - 1) && m >=0 && m <= ((Ny-Nh)/2 - 1)) {
                     nodes[n][m].add<RightWall>();
                 }
-                if (n == (L/2 - 1) && ((Ny+Nh)/2 - 1) <= m <= (Ny-1)) {
+                if (n == (L/2 - 1) && m >= ((Ny+Nh)/2 - 1) && m <= (Ny-1)) {
                     nodes[n][m].add<RightWall>();
                 }
             } else {
@@ -240,10 +240,10 @@ int main(int argc, char *argv[]) {
                 if (m == 0) {
                     nodes[n][m].add<LowerWall>();
                 }
-                if (n == (L/2) && 0 <= m <= ((Ny-Nh)/2 - 1)) {
+                if (n == (L/2) && m <= 0 && m <= ((Ny-Nh)/2 - 1)) {
                     nodes[n][m].add<LeftWall>();
                 }
-                if (n == (L/2) && ((Ny+Nh)/2 - 1) <= m <= (Ny-1)) {
+                if (n == (L/2) && m <= ((Ny+Nh)/2 - 1) && m <= (Ny-1)) {
                     nodes[n][m].add<LeftWall>();
                 }
             }  
@@ -520,15 +520,15 @@ int main(int argc, char *argv[]) {
             verticalUp, verticalDown, horizontalRight, horizontalLeft);
 
             // Update half predictor values
-            velocityHalf.x = velocityStart.x + (TIMESTEP * function.u);
-            velocityHalf.y = velocityStart.y + (TIMESTEP * function.v);
-            densityHalf.rho = densityStart.rho + (TIMESTEP * function.rho);
+            velocityEnd.x = velocityStart.x + (TIMESTEP * function.u);
+            velocityEnd.y = velocityStart.y + (TIMESTEP * function.v);
+            densityEnd.rho = densityStart.rho + (TIMESTEP * function.rho);
         });
 
     // This system finds and updates FunctionsFourth
     world.system<Position, VelocityEndPredict, DensityEndPredict, FunctionsFourth>()
         .kind(RungeKutta_4)
-        .each([&](Position& pos, VelocityEndPredict& velocity, DensityHalfPredict& density, 
+        .each([&](Position& pos, VelocityEndPredict& velocity, DensityEndPredict& density, 
                   FunctionsFourth& function){
             
             // Initialise Neighbour Node Variables
@@ -627,7 +627,7 @@ int main(int argc, char *argv[]) {
     MyFile_u << "t, ";
     for (int x = 0; x < 2*Nx; ++x) {
         for (int y = 0; y < Ny; ++y) {
-            if (x == 2*Nx-1 & y == Ny-1) {
+            if (x == 2*Nx-1 && y == Ny-1) {
                 MyFile_u << "x" << x << "," << "y" << y << "\n";
             } else {
                 MyFile_u << "x" << x << "," << "y" << y << ";";
@@ -638,7 +638,7 @@ int main(int argc, char *argv[]) {
     MyFile_v << "t, ";
     for (int x = 0; x < 2*Nx; ++x) {
         for (int y = 0; y < Ny; ++y) {
-            if (x == 2*Nx-1 & y == Ny-1) {
+            if (x == 2*Nx-1 && y == Ny-1) {
                 MyFile_v << "x" << x << "," << "y" << y << "\n";
             } else {
                 MyFile_v << "x" << x << "," << "y" << y << ";";
@@ -649,7 +649,7 @@ int main(int argc, char *argv[]) {
     MyFile_rho << "t, ";
     for (int x = 0; x < 2*Nx; ++x) {
         for (int y = 0; y < Ny; ++y) {
-            if (x == 2*Nx-1 & y == Ny-1) {
+            if (x == 2*Nx-1 && y == Ny-1) {
                 MyFile_rho << "x" << x << "," << "y" << y << "\n";
             } else {
                 MyFile_rho << "x" << x << "," << "y" << y << ";";
@@ -663,7 +663,7 @@ int main(int argc, char *argv[]) {
                 world.progress();
             }
         std::cout << t_step << "\n";
-        
+
         // Saves Data to a .txt file
         MyFile_u << (t_step*TIMESTEP)/TIME << ", ";
         MyFile_v << (t_step*TIMESTEP)/TIME << ", ";
@@ -672,7 +672,7 @@ int main(int argc, char *argv[]) {
             for (int y = 0; y < Ny; ++y) {
                 const VelocityStart& velocity = nodes[x][y].get<VelocityStart>();
                 const DensityStart& density = nodes[x][y].get<DensityStart>();
-                if (x == 2*Nx-1 & y == Ny-1) {
+                if (x == 2*Nx-1 && y == Ny-1) {
                     MyFile_u << velocity.x << "\n";
                     MyFile_v << velocity.y << "\n";
                     MyFile_rho << density.rho << "\n";
