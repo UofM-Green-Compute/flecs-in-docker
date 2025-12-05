@@ -9,26 +9,26 @@ This code looks at the dynamical evolution of a compressible
 #include <vector>
 
 // Number of nodes in x-axis. Also equal to the length in unit of node distance
-const double nodeDistance = 1e-3; // node distance in M
+const double nodeDistance = 1; // node distance in M
 
-const double W = 1;
-const int Nx = 500; // Number of from left wall to middle wall and from middle wall to right wall
-const int Ny = 500; // Number of nodes from bottom wall to top wall
-const int Nh = 100;  // Width of hole in middle wall in units of node distance
+const int Nx = 100; // Number of from left wall to middle wall and from middle wall to right wall
+const int Ny = 40; // Number of nodes from bottom wall to hole and hole to top wall
+const int Nh = 20;  // Width of hole in middle wall in units of node distance
 const double TIMESTEP = 0.00001;
-const int NUMBERSTEPS = 1000;
+const int NUMBERSTEPS = 100000;
+const int FILENUMBER = 11;
+const int SAVESTEP = NUMBERSTEPS/(FILENUMBER-1);
 const double TIME = NUMBERSTEPS*TIMESTEP;
-
 
 const double R = 8.314;  // Molar Gas Constant
 const double T = 300;    // Temperature of air (room temperature)
 const double M = 0.0290; // Molar mass of air
 
 const double L = 2 * Nx; // Box length in units of node distance
-const double W_b = Ny;   // Box width in units of node distance
-const double W_h = Nh;   // Hole width in units of node distance
+const double W = 2 * Ny + Nh; // Box width in units of node distance
 
-const double RhoStart = 1.292;
+const double RhoLeft = 1.292;
+const double RhoRight = 1; // Make density in right box less than left box
 
 // Position Components
 struct Position {int x, y; }; // Node position in units of node distance and offset by + 1/2
@@ -64,13 +64,10 @@ double u_function(double u, double u_right, double u_left, double u_up,
     This function calculates the function used in runge-kutta approximations
     to find the value of u at a new time step
     */
-    double f = -(1/(2*nodeDistance)) 
-            * (
-              ((R*T/M)*((rho_right-rho_left)/rho))
-            + (u*(u_right-u_left))
-            + (v*(u_up-u_down))
-            );
-
+    double f = - (((R*T/M)*((rho_right-rho_left)/rho))
+             + (u*(u_right-u_left))
+             + (v*(u_up-u_down)))
+             /(2*nodeDistance);
     return f;
 }
 
@@ -81,13 +78,11 @@ double v_function(double v, double v_right, double v_left, double v_up,
     This function calculates the function used in runge-kutta approximations
     to find the value of v at a new time step
     */
-    double f = -(1/(2*nodeDistance)) 
-            * (
-              ((R*T/M)*((rho_up-rho_down)/rho))
-            + (u*(v_right-v_left))
-            + (v*(v_up-v_down))
-            );
-            
+    double f = - (((R*T/M)*((rho_up-rho_down)/rho))
+              + (u*(v_right-v_left))
+              + (v*(v_up-v_down)))
+              / (2*nodeDistance);
+
     return f;
 }
 
@@ -98,46 +93,26 @@ double rho_function(double rho_right, double rho_left, double rho_up, double rho
     This function calculates the function used in runge-kutta approximations
     to find the value of rho at a new time step
     */
-    double f = -(1/(2*nodeDistance)) 
-            * (
-              (rho_right * u_right)
-            - (rho_left * u_left)
-            + (rho_up * v_up)
-            - (rho_down * v_down)
-            );
-            
+    double f = -((rho_right * u_right)
+             - (rho_left * u_left)
+             + (rho_up * v_up)
+             - (rho_down * v_down))
+             / (2*nodeDistance);
     return f;
 }
 
 int main(int argc, char *argv[]) {
-    // Prepare Save File
-    std::ofstream MyFile_u;
-    std::ofstream MyFile_v;
-    std::ofstream MyFile_rho;
+    
+    // Create specifactions file
+    std::ofstream Specs;
+    Specs.open("specs.txt");
+    // Column titles
+    Specs << "Box Length, Box Width, Hole Width, time step, number of files, Density 1, Density 2" << "\n";
+    // Specs
+    Specs << L*nodeDistance << ", " << W*nodeDistance << ", " << Nh*nodeDistance << ", "
+          << SAVESTEP*TIMESTEP << ", " << FILENUMBER + 1 << ", "<< RhoLeft << ", " <<  RhoRight << "\n";
+    Specs.close();
 
-    MyFile_u.open("horizontal_velocity.txt");
-    MyFile_v.open("vertical_velocity.txt");
-    MyFile_rho.open("density.txt");
-
-
-    // Check Save Files are open/created
-    if (!MyFile_u.is_open())
-    {
-        std::cout<<"Error in creating file horizontal_velocity.txt"<<std::endl; 
-        return 1; 
-    }
-
-    if (!MyFile_v.is_open())
-    {
-        std::cout<<"Error in creating file vertical_velocity.txt"<<std::endl; 
-        return 1; 
-    }
-
-    if (!MyFile_rho.is_open())
-    {
-        std::cout<<"Error in creating file density.txt"<<std::endl; 
-        return 1; 
-    }
     // Create World
     flecs::world world(argc, argv);
 
@@ -161,7 +136,6 @@ int main(int argc, char *argv[]) {
         .add(flecs::Phase) // This phase replaces phi_start with phi_end_correct
         .depends_on(RungeKutta_4);
     
-
     // Create components inside the world
     world.component<Position>();
 
@@ -195,7 +169,7 @@ int main(int argc, char *argv[]) {
     // Create non-boundary Nodes
     for (int n = 0; n < 2*Nx; ++n) {
         nodes.push_back({});
-        for (int m = 0; m < Ny; ++m) {
+        for (int m = 0; m < (2*Ny + Nh); ++m) {
             nodes[n].push_back(
                 world.entity()
                     .set<Position>({n, m})
@@ -210,40 +184,40 @@ int main(int argc, char *argv[]) {
                     .set<FunctionsSecond>({0, 0, 0})
                     .set<FunctionsThird>({0, 0, 0})
                     .set<FunctionsFourth>({0, 0, 0})
-
             );
-            if (n < L/2) {
-                nodes[n][m].set<DensityStart>({RhoStart});
+
+            if (n < Nx) {
+                nodes[n][m].set<DensityStart>({RhoLeft});
                 if (n == 0) {
                     nodes[n][m].add<LeftWall>();
                 }
-                if (m == Ny-1) {
+                if (m == W - 1) {
                     nodes[n][m].add<UpperWall>();
                 }
                 if (m == 0) {
                     nodes[n][m].add<LowerWall>();
                 }
-                if (n == (L/2 - 1) && m <= ((Ny-Nh)/2 - 1)) {
+                if (n == (Nx - 1) && m < Ny) {
                     nodes[n][m].add<RightWall>();
                 }
-                if (n == (L/2 - 1) && m >= ((Ny+Nh)/2)) {
+                if (n == (Nx - 1) && m >= (Ny+Nh)) {
                     nodes[n][m].add<RightWall>();
                 }
             } else {
-                nodes[n][m].set<DensityStart>({0});
-                if (n == Nx-1) {
+                nodes[n][m].set<DensityStart>({RhoRight});
+                if (n == L-1) {
                     nodes[n][m].add<RightWall>();
                 }
-                if (m == Ny-1) {
+                if (m == W - 1) {
                     nodes[n][m].add<UpperWall>();
                 }
                 if (m == 0) {
                     nodes[n][m].add<LowerWall>();
                 }
-                if (n == (L/2) && m <= ((Ny-Nh)/2 - 1)) {
+                if (n == Nx && m < Ny) {
                     nodes[n][m].add<LeftWall>();
                 }
-                if (n == (L/2) && m >= ((Ny+Nh)/2)) {
+                if (n == Nx && m >= (Ny + Nh)) {
                     nodes[n][m].add<LeftWall>();
                 }
             }  
@@ -280,10 +254,10 @@ int main(int argc, char *argv[]) {
                 verticalUp = -velocityStart.y;
                 densityUp = densityStart.rho;
             } else {
-                const VelocityStart& velUp = nodes[pos.x][pos.y].get<VelocityStart>();
-                const DensityStart& denUp = nodes[pos.x][pos.y].get<DensityStart>();
+                const VelocityStart& velUp = nodes[pos.x][pos.y+1].get<VelocityStart>();
+                const DensityStart& denUp = nodes[pos.x][pos.y+1].get<DensityStart>();
                 horizontalUp = velUp.x;
-                verticalUp = -velUp.y;
+                verticalUp = velUp.y;
                 densityUp = denUp.rho;
             }
             // Ensure lower wall boundary conditions if necessary
@@ -292,10 +266,10 @@ int main(int argc, char *argv[]) {
                 verticalDown = -velocityStart.y;
                 densityDown = densityStart.rho;
             } else {
-                const VelocityStart& velDown = nodes[pos.x][pos.y].get<VelocityStart>();
-                const DensityStart& denDown = nodes[pos.x][pos.y].get<DensityStart>();
+                const VelocityStart& velDown = nodes[pos.x][pos.y-1].get<VelocityStart>();
+                const DensityStart& denDown = nodes[pos.x][pos.y-1].get<DensityStart>();
                 horizontalDown = velDown.x;
-                verticalDown = -velDown.y;
+                verticalDown = velDown.y;
                 densityDown = denDown.rho;
             }
 
@@ -305,9 +279,9 @@ int main(int argc, char *argv[]) {
                 verticalRight = velocityStart.y;
                 densityRight = densityStart.rho;
             } else {
-                const VelocityStart& velRight = nodes[pos.x][pos.y].get<VelocityStart>();
-                const DensityStart& denRight = nodes[pos.x][pos.y].get<DensityStart>();
-                horizontalRight = -velRight.x;
+                const VelocityStart& velRight = nodes[pos.x+1][pos.y].get<VelocityStart>();
+                const DensityStart& denRight = nodes[pos.x+1][pos.y].get<DensityStart>();
+                horizontalRight = velRight.x;
                 verticalRight = velRight.y;
                 densityRight = denRight.rho;
             }
@@ -318,16 +292,16 @@ int main(int argc, char *argv[]) {
                 verticalLeft = velocityStart.y;
                 densityLeft = densityStart.rho;
             } else {
-                const VelocityStart& velLeft = nodes[pos.x][pos.y].get<VelocityStart>();
-                const DensityStart& denLeft = nodes[pos.x][pos.y].get<DensityStart>();
-                horizontalLeft = -velLeft.x;
+                const VelocityStart& velLeft = nodes[pos.x-1][pos.y].get<VelocityStart>();
+                const DensityStart& denLeft = nodes[pos.x-1][pos.y].get<DensityStart>();
+                horizontalLeft = velLeft.x;
                 verticalLeft = velLeft.y;
                 densityLeft = denLeft.rho;
             }
 
             // Find first Runge Kutta functions
             function.u = u_function(velocityStart.x, horizontalRight, horizontalLeft, horizontalUp, 
-            horizontalDown, velocityStart.y, densityStart.rho, densityRight, densityLeft);
+            horizontalDown, velocityStart.y, densityStart.rho, densityRight, densityLeft);  
 
             function.v = v_function(velocityStart.y, verticalRight, verticalLeft, verticalUp, 
             verticalDown, velocityStart.x, densityStart.rho, densityUp, densityDown);
@@ -372,10 +346,10 @@ int main(int argc, char *argv[]) {
                 verticalUp = -velocityPredict.y;
                 densityUp = densityPredict.rho;
             } else {
-                const VelocityHalfPredict& velUp = nodes[pos.x][pos.y].get<VelocityHalfPredict>();
-                const DensityHalfPredict& denUp = nodes[pos.x][pos.y].get<DensityHalfPredict>();
+                const VelocityHalfPredict& velUp = nodes[pos.x][pos.y+1].get<VelocityHalfPredict>();
+                const DensityHalfPredict& denUp = nodes[pos.x][pos.y+1].get<DensityHalfPredict>();
                 horizontalUp = velUp.x;
-                verticalUp = -velUp.y;
+                verticalUp = velUp.y;
                 densityUp = denUp.rho;
             }
             // Ensure lower wall boundary conditions if necessary
@@ -384,10 +358,10 @@ int main(int argc, char *argv[]) {
                 verticalDown = -velocityPredict.y;
                 densityDown = densityPredict.rho;
             } else {
-                const VelocityHalfPredict& velDown = nodes[pos.x][pos.y].get<VelocityHalfPredict>();
-                const DensityHalfPredict& denDown = nodes[pos.x][pos.y].get<DensityHalfPredict>();
+                const VelocityHalfPredict& velDown = nodes[pos.x][pos.y-1].get<VelocityHalfPredict>();
+                const DensityHalfPredict& denDown = nodes[pos.x][pos.y-1].get<DensityHalfPredict>();
                 horizontalDown = velDown.x;
-                verticalDown = -velDown.y;
+                verticalDown = velDown.y;
                 densityDown = denDown.rho;
             }
 
@@ -397,9 +371,9 @@ int main(int argc, char *argv[]) {
                 verticalRight = velocityPredict.y;
                 densityRight = densityPredict.rho;
             } else {
-                const VelocityHalfPredict& velRight = nodes[pos.x][pos.y].get<VelocityHalfPredict>();
-                const DensityHalfPredict& denRight = nodes[pos.x][pos.y].get<DensityHalfPredict>();
-                horizontalRight = -velRight.x;
+                const VelocityHalfPredict& velRight = nodes[pos.x+1][pos.y].get<VelocityHalfPredict>();
+                const DensityHalfPredict& denRight = nodes[pos.x+1][pos.y].get<DensityHalfPredict>();
+                horizontalRight = velRight.x;
                 verticalRight = velRight.y;
                 densityRight = denRight.rho;
             }
@@ -410,14 +384,14 @@ int main(int argc, char *argv[]) {
                 verticalLeft = velocityPredict.y;
                 densityLeft = densityPredict.rho;
             } else {
-                const VelocityHalfPredict& velLeft = nodes[pos.x][pos.y].get<VelocityHalfPredict>();
-                const DensityHalfPredict& denLeft = nodes[pos.x][pos.y].get<DensityHalfPredict>();
-                horizontalLeft = -velLeft.x;
+                const VelocityHalfPredict& velLeft = nodes[pos.x-1][pos.y].get<VelocityHalfPredict>();
+                const DensityHalfPredict& denLeft = nodes[pos.x-1][pos.y].get<DensityHalfPredict>();
+                horizontalLeft = velLeft.x;
                 verticalLeft = velLeft.y;
                 densityLeft = denLeft.rho;
             }
 
-            // Find first Runge Kutta functions
+            // Find second Runge Kutta functions
             function.u = u_function(velocityPredict.x, horizontalRight, horizontalLeft, horizontalUp, 
             horizontalDown, velocityPredict.y, densityPredict.rho, densityRight, densityLeft);
 
@@ -464,10 +438,10 @@ int main(int argc, char *argv[]) {
                 verticalUp = -velocityHalf.y;
                 densityUp = densityHalf.rho;
             } else {
-                const VelocityHalfCorrect& velUp = nodes[pos.x][pos.y].get<VelocityHalfCorrect>();
-                const DensityHalfCorrect& denUp = nodes[pos.x][pos.y].get<DensityHalfCorrect>();
+                const VelocityHalfCorrect& velUp = nodes[pos.x][pos.y+1].get<VelocityHalfCorrect>();
+                const DensityHalfCorrect& denUp = nodes[pos.x][pos.y+1].get<DensityHalfCorrect>();
                 horizontalUp = velUp.x;
-                verticalUp = -velUp.y;
+                verticalUp = velUp.y;
                 densityUp = denUp.rho;
             }
             // Ensure lower wall boundary conditions if necessary
@@ -476,10 +450,10 @@ int main(int argc, char *argv[]) {
                 verticalDown = -velocityHalf.y;
                 densityDown = densityHalf.rho;
             } else {
-                const VelocityHalfCorrect& velDown = nodes[pos.x][pos.y].get<VelocityHalfCorrect>();
-                const DensityHalfCorrect& denDown = nodes[pos.x][pos.y].get<DensityHalfCorrect>();
+                const VelocityHalfCorrect& velDown = nodes[pos.x][pos.y-1].get<VelocityHalfCorrect>();
+                const DensityHalfCorrect& denDown = nodes[pos.x][pos.y-1].get<DensityHalfCorrect>();
                 horizontalDown = velDown.x;
-                verticalDown = -velDown.y;
+                verticalDown = velDown.y;
                 densityDown = denDown.rho;
             }
 
@@ -489,9 +463,9 @@ int main(int argc, char *argv[]) {
                 verticalRight = velocityHalf.y;
                 densityRight = densityHalf.rho;
             } else {
-                const VelocityHalfCorrect& velRight = nodes[pos.x][pos.y].get<VelocityHalfCorrect>();
-                const DensityHalfCorrect& denRight = nodes[pos.x][pos.y].get<DensityHalfCorrect>();
-                horizontalRight = -velRight.x;
+                const VelocityHalfCorrect& velRight = nodes[pos.x+1][pos.y].get<VelocityHalfCorrect>();
+                const DensityHalfCorrect& denRight = nodes[pos.x+1][pos.y].get<DensityHalfCorrect>();
+                horizontalRight = velRight.x;
                 verticalRight = velRight.y;
                 densityRight = denRight.rho;
             }
@@ -502,9 +476,9 @@ int main(int argc, char *argv[]) {
                 verticalLeft = velocityHalf.y;
                 densityLeft = densityHalf.rho;
             } else {
-                const VelocityHalfCorrect& velLeft = nodes[pos.x][pos.y].get<VelocityHalfCorrect>();
-                const DensityHalfCorrect& denLeft = nodes[pos.x][pos.y].get<DensityHalfCorrect>();
-                horizontalLeft = -velLeft.x;
+                const VelocityHalfCorrect& velLeft = nodes[pos.x-1][pos.y].get<VelocityHalfCorrect>();
+                const DensityHalfCorrect& denLeft = nodes[pos.x-1][pos.y].get<DensityHalfCorrect>();
+                horizontalLeft = velLeft.x;
                 verticalLeft = velLeft.y;
                 densityLeft = denLeft.rho;
             }
@@ -553,10 +527,10 @@ int main(int argc, char *argv[]) {
                 verticalUp = -velocity.y;
                 densityUp = density.rho;
             } else {
-                const VelocityEndPredict& velUp = nodes[pos.x][pos.y].get<VelocityEndPredict>();
-                const DensityEndPredict& denUp = nodes[pos.x][pos.y].get<DensityEndPredict>();
+                const VelocityEndPredict& velUp = nodes[pos.x][pos.y+1].get<VelocityEndPredict>();
+                const DensityEndPredict& denUp = nodes[pos.x][pos.y+1].get<DensityEndPredict>();
                 horizontalUp = velUp.x;
-                verticalUp = -velUp.y;
+                verticalUp = velUp.y;
                 densityUp = denUp.rho;
             }
             // Ensure lower wall boundary conditions if necessary
@@ -565,10 +539,10 @@ int main(int argc, char *argv[]) {
                 verticalDown = -velocity.y;
                 densityDown = density.rho;
             } else {
-                const VelocityEndPredict& velDown = nodes[pos.x][pos.y].get<VelocityEndPredict>();
-                const DensityEndPredict& denDown = nodes[pos.x][pos.y].get<DensityEndPredict>();
+                const VelocityEndPredict& velDown = nodes[pos.x][pos.y-1].get<VelocityEndPredict>();
+                const DensityEndPredict& denDown = nodes[pos.x][pos.y-1].get<DensityEndPredict>();
                 horizontalDown = velDown.x;
-                verticalDown = -velDown.y;
+                verticalDown = velDown.y;
                 densityDown = denDown.rho;
             }
 
@@ -578,9 +552,9 @@ int main(int argc, char *argv[]) {
                 verticalRight = velocity.y;
                 densityRight = density.rho;
             } else {
-                const VelocityEndPredict& velRight = nodes[pos.x][pos.y].get<VelocityEndPredict>();
-                const DensityEndPredict& denRight = nodes[pos.x][pos.y].get<DensityEndPredict>();
-                horizontalRight = -velRight.x;
+                const VelocityEndPredict& velRight = nodes[pos.x+1][pos.y].get<VelocityEndPredict>();
+                const DensityEndPredict& denRight = nodes[pos.x+1][pos.y].get<DensityEndPredict>();
+                horizontalRight = velRight.x;
                 verticalRight = velRight.y;
                 densityRight = denRight.rho;
             }
@@ -591,9 +565,9 @@ int main(int argc, char *argv[]) {
                 verticalLeft = velocity.y;
                 densityLeft = density.rho;
             } else {
-                const VelocityEndPredict& velLeft = nodes[pos.x][pos.y].get<VelocityEndPredict>();
-                const DensityEndPredict& denLeft = nodes[pos.x][pos.y].get<DensityEndPredict>();
-                horizontalLeft = -velLeft.x;
+                const VelocityEndPredict& velLeft = nodes[pos.x-1][pos.y].get<VelocityEndPredict>();
+                const DensityEndPredict& denLeft = nodes[pos.x-1][pos.y].get<DensityEndPredict>();
+                horizontalLeft = velLeft.x;
                 verticalLeft = velLeft.y;
                 densityLeft = denLeft.rho;
             }
@@ -616,77 +590,73 @@ int main(int argc, char *argv[]) {
         .kind(Update)
         .each([](VelocityStart& velocityStart, DensityStart& densityStart, FunctionsFirst& f1, 
                  FunctionsSecond& f2, FunctionsThird& f3, FunctionsFourth& f4){
-            velocityStart.x = velocityStart.x + (TIME*(f1.u + 2*f2.u + 2*f3.u + f4.u))/6;
-            velocityStart.y = velocityStart.y + (TIME*(f1.v + 2*f2.v + 2*f3.v + f4.v))/6;
-            densityStart.rho = densityStart.rho + (TIME*(f1.rho +2*f2.rho + 2*f3.rho + f4.rho))/6;
+            velocityStart.x = velocityStart.x + (TIMESTEP*(f1.u + 2*f2.u + 2*f3.u + f4.u))/6;
+            velocityStart.y = velocityStart.y + (TIMESTEP*(f1.v + 2*f2.v + 2*f3.v + f4.v))/6;
+            densityStart.rho = densityStart.rho + (TIMESTEP*(f1.rho +2*f2.rho + 2*f3.rho + f4.rho))/6;
         });
 
-    // This updates Velocity Start and DensityStart
-    
-    // Set horizontal_velocity.txt file headers
-    MyFile_u << "t, ";
-    for (int x = 0; x < 2*Nx; ++x) {
-        for (int y = 0; y < Ny; ++y) {
-            if (x == 2*Nx-1 && y == Ny-1) {
-                MyFile_u << "x" << x << "y" << y << "\n";
-            } else {
-                MyFile_u << "x" << x << "y" << y << ",";
-            }
-        }
-    }
-    
-    MyFile_v << "t, ";
-    for (int x = 0; x < 2*Nx; ++x) {
-        for (int y = 0; y < Ny; ++y) {
-            if (x == 2*Nx-1 && y == Ny-1) {
-                MyFile_v << "x" << x << "," << "y" << y << "\n";
-            } else {
-                MyFile_v << "x" << x << "," << "y" << y << ";";
-            }
-        }
-    }
-
-    MyFile_rho << "t, ";
-    for (int x = 0; x < 2*Nx; ++x) {
-        for (int y = 0; y < Ny; ++y) {
-            if (x == 2*Nx-1 && y == Ny-1) {
-                MyFile_rho << "x" << x << "," << "y" << y << "\n";
-            } else {
-                MyFile_rho << "x" << x << "," << "y" << y << ";";
-            }
-        }
-    }
-
     // Run through systems every time step
-    for (int t_step = 0; t_step <= NUMBERSTEPS; ++t_step) {
+    for (int t_step = 0; t_step <= NUMBERSTEPS; t_step++) {
         if (t_step != 0) {
                 world.progress();
             }
         std::cout << t_step << "\n";
-
+        
         // Saves Data to a .txt file
-        MyFile_u << (t_step*TIMESTEP)/TIME << ", ";
-        MyFile_v << (t_step*TIMESTEP)/TIME << ", ";
-        MyFile_rho << (t_step*TIMESTEP)/TIME << ", ";
-        for (int x = 0; x < 2*Nx; ++x) {
-            for (int y = 0; y < Ny; ++y) {
-                const VelocityStart& velocity = nodes[x][y].get<VelocityStart>();
-                const DensityStart& density = nodes[x][y].get<DensityStart>();
-                if (x == 2*Nx-1 && y == Ny-1) {
-                    MyFile_u << velocity.x << "\n";
-                    MyFile_v << velocity.y << "\n";
-                    MyFile_rho << density.rho << "\n";
-                } else {
-                    MyFile_u << velocity.x << ", ";
-                    MyFile_v << velocity.y << ", ";
-                    MyFile_rho << density.rho << ", ";
+        if (t_step%SAVESTEP == 0) {
+            // Prepare Save Files
+            std::ofstream MyFile_u;
+            std::ofstream MyFile_v;
+            std::ofstream MyFile_rho;
+            // Create filenames
+            std::string horizontalName="horizontal_t=" + std::to_string(t_step*TIMESTEP) + ".txt";
+            std::string verticalName="vertical_t=" + std::to_string(t_step*TIMESTEP) + ".txt";
+            std::string densityName="density_t=" + std::to_string(t_step*TIMESTEP) + ".txt";
+            // Create files
+            MyFile_u.open(horizontalName);
+            MyFile_v.open(verticalName);
+            MyFile_rho.open(densityName);
+
+
+            // Check Save Files are open/created
+            if (!MyFile_u.is_open())
+            {
+                std::cout<<"Error in creating file horizontal_velocity.txt"<<std::endl; 
+                return 1; 
+            }
+
+            if (!MyFile_v.is_open())
+            {
+                std::cout<<"Error in creating file vertical_velocity.txt"<<std::endl; 
+                return 1; 
+            }
+
+            if (!MyFile_rho.is_open())
+            {
+                std::cout<<"Error in creating file density.txt"<<std::endl; 
+                return 1; 
+            }
+
+            for (int y = 0; y < (2*Ny + Nh); y++) {
+                for (int x = 0; x < 2*Nx; x++) {
+                    const VelocityStart& velocity = nodes[x][y].get<VelocityStart>();
+                    const DensityStart& density = nodes[x][y].get<DensityStart>();
+                    if (x == 2*Nx-1) {
+                        MyFile_u << velocity.x << "\n";
+                        MyFile_v << velocity.y << "\n";
+                        MyFile_rho << density.rho << "\n";
+                    } else {
+                        MyFile_u << velocity.x << ", ";
+                        MyFile_v << velocity.y << ", ";
+                        MyFile_rho << density.rho << ", ";
+                    }
                 }
             }
+            // Close Save File
+            MyFile_u.close();
+            MyFile_v.close();
+            MyFile_rho.close();
         }
-    }
-
-    // Close Save File
-    MyFile_u.close();
-    MyFile_v.close();
-    MyFile_rho.close();
+        
+    }   
 }
