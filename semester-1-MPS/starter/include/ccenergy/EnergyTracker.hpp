@@ -52,15 +52,9 @@
 //
 
 #pragma once
-#include <string>
-#include <chrono>
-#include <optional>
-#include <vector>
-#include <memory>
-#include <cstdint>
-#include <functional>
-#include <cstdio>
 
+#include <vector>
+#include <functional>
 #include <fstream>
 #include <filesystem>
 
@@ -197,7 +191,7 @@ namespace ccenergy {
         std::vector < Domain > d;
       for (auto & e:fs::directory_iterator("/sys/class/powercap")) {
             auto n = e.path().filename().string();
-            if (n.rfind("intel-rapl:", 0) == 0) {
+            if (n == "intel-rapl:0") { // Rather than add all of the domains, just add the one we expect to find in our setup
                 Domain dom;
                 dom.energy_path = (e.path() / "energy_uj").string();
                 dom.max_path = (e.path() / "max_energy_range_uj").string();
