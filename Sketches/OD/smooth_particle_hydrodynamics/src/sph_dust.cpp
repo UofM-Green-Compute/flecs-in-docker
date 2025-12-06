@@ -33,8 +33,8 @@ struct ParticleIndex {int i; };
 struct Box {int k; }; 
 
 // Constants
-int NO_PARTICLES = 20; 
-const int STEPS = 4000; // Number of time steps
+int NO_PARTICLES = 50; 
+const int STEPS = 1; // Number of time steps
 double DT = 0.0001;    // Time step 
 double PARTICLE_MASS = 1.6735575 * pow(10,-27); // Mass of Hydrogen
 
@@ -54,7 +54,6 @@ double K_B = 1.380649 * pow(10,-23);  // Units: m^2 kg s^-2 K^-1
 double SIGMA = 10 / (7 * M_PI);       // Normalisation constant for kernel in two dimensions
 int NO_DIMENSIONS = 2; 
 double COURANT_NO = 1;                // Courant number
-
 
 // Boltzman distribution
 // Probability that a particle has velocity between v and v+dv = dv * maxwell_boltzmann()
@@ -101,14 +100,13 @@ double spline_W(double r) {
 }
 
 // Function to calculate vector distance between particles 
-std::vector<double> vector_distance(flecs::entity Particle, flecs::entity Particle_i){
+std::vector<double> vector_distance(std::vector<double> position_r, flecs::entity Particle_i){
     std::vector<double> displacement{0.0,0.0}; 
 
-    Position p = Particle.get<Position>();
     Position p_i = Particle_i.get<Position>();
 
-    displacement.push_back(p.x - p_i.x);
-    displacement.push_back(p.y - p_i.y);
+    displacement.push_back(position_r[0] - p_i.x);
+    displacement.push_back(position_r[1] - p_i.y);
 
     return displacement; 
 }
@@ -120,13 +118,12 @@ double absolute_distance(std::vector<double> displacement){
 }
 
 // Function to caluclate density rho at the position of some particle
-double density(std::vector<flecs::entity> Particles, flecs::entity particle){
+double density(std::vector<double> position_r, std::vector<flecs::entity> Particles){
     double Density = 0; 
-    int particle_index = particle.get<ParticleIndex>().i; 
 
     for (int j=0; j<Particles.size(); j++)
     {
-        std::vector<double> distance_vec = vector_distance(Particles[particle_index],Particles[j]); 
+        std::vector<double> distance_vec = vector_distance(position_r,Particles[j]); 
         double R = absolute_distance(distance_vec);  
         Density += Particles[j].get<Mass>().m * spline_W(R) ; 
     }
@@ -136,7 +133,11 @@ double density(std::vector<flecs::entity> Particles, flecs::entity particle){
 // Gradient of Gaussian Interpolant Function
 std::vector<double> grad_gaussian_W(flecs::entity p_a, flecs::entity p_b) 
 { 
-    std::vector<double> vec_distance = vector_distance(p_a,p_b); 
+    std::vector<double> pos_a; 
+    pos_a.push_back(p_a.get<Position>().x); 
+    pos_a.push_back(p_a.get<Position>().y); 
+
+    std::vector<double> vec_distance = vector_distance(pos_a,p_b); 
     double R = absolute_distance(vec_distance); 
     std::vector<double> grad; 
 
@@ -148,7 +149,11 @@ std::vector<double> grad_gaussian_W(flecs::entity p_a, flecs::entity p_b)
 // Gradient of Spline Interpolant Function
 std::vector<double> grad_spline_W(flecs::entity p_a, flecs::entity p_b)
 {
-    std::vector<double> vec_distance = vector_distance(p_a,p_b); 
+    std::vector<double> pos_a; 
+    pos_a.push_back(p_a.get<Position>().x); 
+    pos_a.push_back(p_a.get<Position>().y); 
+
+    std::vector<double> vec_distance = vector_distance(pos_a,p_b); 
     double R = absolute_distance(vec_distance); 
 
     double q = R / CONST_H; 
@@ -178,7 +183,12 @@ std::vector<double> grad_spline_W(flecs::entity p_a, flecs::entity p_b)
 double vdw_pressure(std::vector<flecs::entity> Particles, flecs::entity particle){
     // Van der Waals equation of state to find pressure
     double mass = particle.get<Mass>().m; 
-    double Density = density(Particles, particle); 
+
+    std::vector<double> particle_position; 
+    particle_position.push_back(particle.get<Position>().x); 
+    particle_position.push_back(particle.get<Position>().y); 
+
+    double Density = density(particle_position,Particles); 
 
     double alpha_bar = ALPHA / mass; 
     double beta_bar = BETA / mass; 
@@ -194,6 +204,7 @@ std::vector<double> force(std::vector<flecs::entity> Particles, flecs::entity Pa
     // Particle position
     double x_a = Particle_a.get<Position>().x; 
     double y_a = Particle_a.get<Position>().y;
+    std::vector<double> particle_a_position = {x_a,y_a};
 
     // Particle mass
     double m_a = Particle_a.get<Mass>().m; 
@@ -202,7 +213,7 @@ std::vector<double> force(std::vector<flecs::entity> Particles, flecs::entity Pa
     double p_a = vdw_pressure(Particles, Particle_a);
 
     // Calculate density at a
-    double rho_a = density(Particles, Particle_a);
+    double rho_a = density(particle_a_position,Particles);
 
     for(int i = 0; i < Particles.size()-1; i++)
     {
@@ -211,16 +222,17 @@ std::vector<double> force(std::vector<flecs::entity> Particles, flecs::entity Pa
         {
             double x_b = Particles[i].get<Position>().x;
             double y_b = Particles[i].get<Position>().y;
+            std::vector<double> particle_b_position = {x_b,y_b}; 
 
             // Particle distance
-            std::vector<double> disp = vector_distance(Particle_a,Particles[i]); 
+            std::vector<double> disp = vector_distance(particle_a_position,Particles[i]); 
             double R = absolute_distance(disp);
 
             double m_b = Particles[i].get<Mass>().m;
 
             double p_b = vdw_pressure(Particles, Particles[i]);
 
-            double rho_b = density(Particles, Particles[i]);
+            double rho_b = density(particle_b_position,Particles);
 
             // make into one constant
             double constant = (m_a * m_b) * ( p_b / (pow(rho_b,2)) + p_a / (pow(rho_a,2)));
@@ -240,19 +252,8 @@ int main(int argc, char* argv[]) {
     clock_t t; 
     t = clock(); 
 
-    // Open file for writing - Specifications file
-    std::ofstream MyFile; 
-    MyFile.open("/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/smooth_particle_hydrodynamics/outputs/sph_code_specifications.txt");
-    if (!MyFile.is_open())
-    {
-        std::cout<<"Error in creating file"<<std::endl; 
-        return 1; 
-    }
-    MyFile << STEPS << " | " << NO_PARTICLES <<std::endl;
-    MyFile << T << " | " << PARTICLE_MASS <<std::endl;
-    MyFile.close(); 
-
     // Open file for writing - Data file
+    std::ofstream MyFile;
     MyFile.open("/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/smooth_particle_hydrodynamics/outputs/SPH_Dust.txt");
     if (!MyFile.is_open())
     {
@@ -260,6 +261,28 @@ int main(int argc, char* argv[]) {
         return 1; 
     }
     MyFile << "Particle 1 position x_1 (cm), y_1 (cm), Particle 1 velocity v_x, v_y |  x_2,y_2,v_x,v_y ; ..."<< std::endl;
+
+    // Open file for writing - Specifications file
+    std::ofstream MyFile_specs; 
+    MyFile_specs.open("/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/smooth_particle_hydrodynamics/outputs/sph_code_specifications.txt");
+    if (!MyFile_specs.is_open())
+    {
+        std::cout<<"Error in creating file"<<std::endl; 
+        return 1; 
+    }
+    MyFile_specs << STEPS << " | " << NO_PARTICLES <<std::endl;
+    MyFile_specs << T << " | " << PARTICLE_MASS <<std::endl;
+    MyFile_specs << GX << " | " << GX2 << " | " << GY <<std::endl;
+    MyFile_specs.close(); 
+
+    // Open file for writing - Density field file
+        std::ofstream MyFile_density;
+        MyFile_density.open("/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/smooth_particle_hydrodynamics/outputs/density_field.txt");
+        if (!MyFile_density.is_open())
+        {
+            std::cout<<"Error in opening file"<<std::endl; 
+            return 1; 
+        }
 
     // Create the flecs world
     flecs::world world(argc,argv);
@@ -284,13 +307,15 @@ int main(int argc, char* argv[]) {
     std::vector<flecs::entity> particles; 
     particles.reserve(2*NO_PARTICLES); 
 
-    int stationary_time = 10000000; // Time taken for Markov Chain to reach stationary state after random initialisation
+    int stationary_time = 1000; // Time taken for Markov Chain to reach stationary state after random initialisation
     int sample_interval = stationary_time; // 10000; // Number of time steps in bewteen taking samples of the distribution 
 
     std::vector<double> x_velocities; 
     x_velocities.reserve(NO_PARTICLES); 
     std::vector<double> y_velocities; 
     y_velocities.reserve(NO_PARTICLES);
+    std::vector<std::vector<double>> density_matrix;
+    density_matrix.reserve(GY*(GX+GX2)); 
 
     double v_x = Uspd(rng);
     double v_y = Uspd(rng); 
@@ -323,8 +348,8 @@ int main(int argc, char* argv[]) {
         if (i >= stationary_time)
         {
             j+=1; 
-            if(j=sample_interval){ x_velocities.push_back(v_x); y_velocities.push_back(v_y); 
-                std::cout<<v_x<<std::endl; j=0; }
+            if(j=sample_interval){ x_velocities.push_back(v_x); y_velocities.push_back(v_y); j=0; }
+                // std::cout<<v_x<<std::endl; j=0; }
         }
         
     }
@@ -441,9 +466,24 @@ int main(int argc, char* argv[]) {
             p.y  += v.dy * DT;
         });
 
+    // Calculate density
+    world.system<>()
+        .each([&](){
+
+        for(int i = 0; i < (GX+GX2); i++)
+        {
+            for(int j = 0; j < GY; j++)
+            {
+                density_matrix[i].push_back(density({double(i),double(j)},particles)); 
+                MyFile_density<<density_matrix[i][j]<<","; 
+            }
+            MyFile_density<<std::endl; 
+        }
+        });
+
     for (int i = 0; i < STEPS; ++i) {
 
-        // std::cout<<i<<std::endl; 
+        std::cout<<i<<std::endl; 
 
         world.progress();
         MyFile<<""<<std::endl; // End the line started in the write to file system
