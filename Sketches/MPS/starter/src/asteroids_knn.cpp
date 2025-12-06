@@ -253,7 +253,9 @@ int main(int argc, char* argv[]) {
     Viewport vp{100, 30, 0.6};
 
     const int STEPS = 1000;
-    const int SLEEP_MS = 16;
+    std::chrono::time_point last = std::chrono::time_point_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now()
+    );
 
     for (int i = 0; i < STEPS; ++i) {
         // Important: bins correspond to *current* positions, so rebuild before systems run
@@ -261,8 +263,15 @@ int main(int argc, char* argv[]) {
 
         world.progress();
 
-        render_ascii(vp, asteroids);
-        std::this_thread::sleep_for(std::chrono::milliseconds(SLEEP_MS));
+        std::chrono::time_point currently = std::chrono::time_point_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now()
+        );
+
+        auto delta = currently - last;
+        if (delta > std::chrono::milliseconds(39)) {
+            last = currently;
+            render_ascii(vp, asteroids);
+        }
     }
     std::cout << "\x1b[?25h\n";  // Show the cursor again
 
