@@ -19,13 +19,19 @@ for i,row in enumerate(specs_file):
         row = row.split("|") 
         Temp = int(row[0])
         Mass = float(row[1])
+    if (i == 2):
+        row = row.split("|") 
+        GX = int(row[0])
+        GX2 = int(row[1])
+        GY = int(row[2])
 
 x_matrix = np.zeros((no_steps,no_particles))
 y_matrix = np.zeros((no_steps,no_particles))
 x_vel_matrix = np.zeros((no_steps,no_particles))
 y_vel_matrix = np.zeros((no_steps,no_particles))
+density_matrix = np.zeros((GY,(GX+GX2)))
 
-no_hist_bins = int(no_particles )
+no_hist_bins = int(no_particles)
 
 for i,row in enumerate(file): 
     if(i == 0):
@@ -40,6 +46,15 @@ for i,row in enumerate(file):
                 y_matrix[i-1][j] = float(pos_vector[1])
                 x_vel_matrix[i-1][j] = float(pos_vector[2])
                 y_vel_matrix[i-1][j] = float(pos_vector[3])
+
+for i,row in enumerate(file): 
+    row = row.split(",")
+        
+    for j in row:
+        density_matrix[i][j] = float(row[j])
+
+plt.contourf(density_matrix)
+plt.colorbar()
 
 # Maxwell-Boltzmann Distribution
 k = 1.380649 * 10**-23
