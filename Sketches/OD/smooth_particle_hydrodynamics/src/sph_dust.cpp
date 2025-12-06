@@ -7,11 +7,10 @@ Simulating an ideal gas using smooth particle hydridynamics in ECS
   When self particle is included in force sums it leads to weird behaviour (strange attractor)
 
 To add:
-- Sample initial velocities from Maxwell Boltzman (Metropolis Algorithm Advanced Statistics)
+- Classical limit of an ideal gas
+- Energy checks: Total energy should be = 3/2*k_b*T*NO_PARTICLES 
 - Model particle interactions: Lenard Jones potential --- do i need to do this? Does EOS do this for me?
 
-Tools:
-- Measure run time: https://www.geeksforgeeks.org/cpp/how-to-measure-time-taken-by-a-program-in-c/
 */
 
 #include <iostream>
@@ -35,9 +34,9 @@ struct Box {int k; };
 
 // Constants
 int NO_PARTICLES = 20; 
-const int STEPS = 10000; // Number of time steps
-double DT = 0.001;    // Time step
-double dt = 0; 
+const int STEPS = 4000; // Number of time steps
+double DT = 0.0001;    // Time step 
+double PARTICLE_MASS = 1.6735575 * pow(10,-27); // Mass of Hydrogen
 
 // Walls of the box ----
 static constexpr double GX = 5;
@@ -48,7 +47,7 @@ double SLIT_WIDTH = 1;
 // Mathematical constants
 double CONST_H = 0.1;                 // Parameter determining size of domain around particle
 // Physical constants
-int T = 100;                          // Temperature 
+int T = 10;                          // Temperature 
 double ALPHA = 0;                     // Van-der-waals coefficient
 double BETA = 0;                      // Van-der-waals coefficient
 double K_B = 1.380649 * pow(10,-23);  // Units: m^2 kg s^-2 K^-1
@@ -56,6 +55,29 @@ double SIGMA = 10 / (7 * M_PI);       // Normalisation constant for kernel in tw
 int NO_DIMENSIONS = 2; 
 double COURANT_NO = 1;                // Courant number
 
+
+// Boltzman distribution
+// Probability that a particle has velocity between v and v+dv = dv * maxwell_boltzmann()
+double maxwell_boltzmann(double v)
+{
+    double norm = 4 * M_PI * pow((PARTICLE_MASS / (2*M_PI*K_B*T)),3.0/2.0) ;
+    double exponential = std::exp( - (PARTICLE_MASS * v*v) / (2 * K_B * T) );
+    return norm * v*v * exponential; 
+}
+
+// Metropolis-Hastings Algorithm
+double metropolis_hastings(double x_i, double delta_i, double r)
+{
+    double x_trial = x_i + delta_i; 
+
+    double w_i = maxwell_boltzmann(x_i); 
+    double w_trial = maxwell_boltzmann(x_trial); 
+
+    double alpha = std::min(1.0,(w_trial/w_i)); 
+
+    if (r < alpha) { return x_trial; }
+    else { return x_i; }
+}
 
 // Interpolant function (Gaussian) -- Monaghan 1992 Equation 2.6
 double gaussian_W(double r) { return ( 1 / CONST_H * sqrt(M_PI) ) * exp(( - pow(r,2) / pow(CONST_H,2) )); }
@@ -218,16 +240,26 @@ int main(int argc, char* argv[]) {
     clock_t t; 
     t = clock(); 
 
-    // Open file for writing
+    // Open file for writing - Specifications file
     std::ofstream MyFile; 
-    MyFile.open("/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/smooth_particle_hydrodynamics/outputs/SPH_Dust.txt");
+    MyFile.open("/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/smooth_particle_hydrodynamics/outputs/sph_code_specifications.txt");
     if (!MyFile.is_open())
     {
         std::cout<<"Error in creating file"<<std::endl; 
         return 1; 
     }
     MyFile << STEPS << " | " << NO_PARTICLES <<std::endl;
-    MyFile << "Particle position x_1 (cm), Particle 1 position y_1 (cm), velocity_x, velocity_y |  x_2,y_2,v_x,v_y ; ..."<< std::endl;
+    MyFile << T << " | " << PARTICLE_MASS <<std::endl;
+    MyFile.close(); 
+
+    // Open file for writing - Data file
+    MyFile.open("/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/smooth_particle_hydrodynamics/outputs/SPH_Dust.txt");
+    if (!MyFile.is_open())
+    {
+        std::cout<<"Error in creating file"<<std::endl; 
+        return 1; 
+    }
+    MyFile << "Particle 1 position x_1 (cm), y_1 (cm), Particle 1 velocity v_x, v_y |  x_2,y_2,v_x,v_y ; ..."<< std::endl;
 
     // Create the flecs world
     flecs::world world(argc,argv);
@@ -243,21 +275,76 @@ int main(int argc, char* argv[]) {
 
     std::uniform_real_distribution<double> UposX(0, GX); 
     std::uniform_real_distribution<double> UposY(0, GY); 
-    std::uniform_real_distribution<double> Uvel(-5, 5);
-    std::uniform_real_distribution<double> Umass(0.5, 2.0); 
+    std::uniform_real_distribution<double> Uspd(0, 5000);
+    std::uniform_real_distribution<double> ZeroOne(0, 1);
+    std::uniform_real_distribution<double> DELTA(-0.1, 0.1);
+    // std::uniform_real_distribution<double> Umass(0.5, 2.0); 
 
     // Initialise entities | Generate random values for initial conditions
     std::vector<flecs::entity> particles; 
-    particles.reserve(NO_PARTICLES); 
+    particles.reserve(2*NO_PARTICLES); 
+
+    int stationary_time = 10000000; // Time taken for Markov Chain to reach stationary state after random initialisation
+    int sample_interval = stationary_time; // 10000; // Number of time steps in bewteen taking samples of the distribution 
+
+    std::vector<double> x_velocities; 
+    x_velocities.reserve(NO_PARTICLES); 
+    std::vector<double> y_velocities; 
+    y_velocities.reserve(NO_PARTICLES);
+
+    double v_x = Uspd(rng);
+    double v_y = Uspd(rng); 
+    int j = 0; 
+
+    for(int i = 0; i < stationary_time + NO_PARTICLES*sample_interval + NO_PARTICLES; i++)
+    {
+        /* 
+        double r_x = ZeroOne(rng); 
+        double delta_x = DELTA(rng); 
+        double v_x = metropolis_hastings(v_x,delta_x,r_x); 
+        if(i>=stationary_time){ x_velocities.push_back(v_x); }
+
+        double r_y = ZeroOne(rng); 
+        double delta_y = DELTA(rng); 
+        double v_y = metropolis_hastings(v_y,delta_y,r_y); 
+        if(i>=stationary_time){ y_velocities.push_back(v_y); }
+        */
+
+        double r_x = ZeroOne(rng); 
+        double delta_x = DELTA(rng); 
+        double v_x = metropolis_hastings(v_x,delta_x,r_x); 
+
+        double r_y = ZeroOne(rng); 
+        double delta_y = DELTA(rng); 
+        double v_y = metropolis_hastings(v_y,delta_y,r_y); 
+
+        // std::cout<<v_x<<std::endl; 
+
+        if (i >= stationary_time)
+        {
+            j+=1; 
+            if(j=sample_interval){ x_velocities.push_back(v_x); y_velocities.push_back(v_y); 
+                std::cout<<v_x<<std::endl; j=0; }
+        }
+        
+    }
 
     for (int i = 0; i < NO_PARTICLES; ++i) { 
+        // Randomly make some of the velocities components negative
+        double a = 1;  
+        double rand = ZeroOne(rng); 
+        if (rand > 0.5 ) { a = -1; }
+        double b = 1;  
+        double randb = ZeroOne(rng); 
+        if (randb > 0.5 ) { b = -1; }
+
         particles.push_back( 
             world.entity() 
                 .set<ParticleIndex>({i}) 
                 .set<Position>({UposX(rng), UposY(rng)}) 
-                .set<Velocity>({Uvel(rng), Uvel(rng)}) 
+                .set<Velocity>({a * x_velocities[i], b * y_velocities[i]}) 
                 .set<Acceleration>({0.0, 0.0}) 
-                .set<Mass>({Umass(rng)})
+                .set<Mass>({PARTICLE_MASS})
                 .set<Box>({0})); 
     } 
 
@@ -279,17 +366,17 @@ int main(int argc, char* argv[]) {
             double x_tolerance = v.dx * DT; 
 
             // Reflect particle for edge cases where position is at a wall after rounding
+
             if ( ((cx < 0) || (cx >= GX+GX2)) ) { v.dx = -v.dx; a.ddx = -a.ddx;}
+            if ( (cy < 0) || (cy >= GY) ) { v.dy = -v.dy; a.ddy = -a.ddy; } 
 
             if ( b.k == 0 && ((p.y < (GY/2 - SLIT_WIDTH/2)) || (p.y > (GY/2 + SLIT_WIDTH/2))) )
             { if ( (cx >= GX) )  { v.dx = -v.dx; a.ddx = -a.ddx;} }
+
             else if (b.k == 1 && !( (p.y > (GY/2 - SLIT_WIDTH/2)) && (p.y < (GY/2 + SLIT_WIDTH/2)) ) )
             { if ( (upx <= GX) )  { v.dx = -v.dx; a.ddx = -a.ddx;} }
             else 
-            { if (p.x > GX) {b.k = 1; } }
-
-            if ( (cy < 0) || (cy >= GY) ) { v.dy = -v.dy; a.ddy = -a.ddy; } 
-            
+            { if (p.x > GX) {b.k = 1; } else {b.k = 0; }}
         });
 
     // Check that time step isn't too large
@@ -297,6 +384,7 @@ int main(int argc, char* argv[]) {
         .kind(flecs::PreUpdate)
         .each([&](){
 
+        double dt = 0;
         double time_step = 0; 
 
         // Particle acceleration constraint | finding min( h / sqrt(F_i) )
@@ -327,7 +415,7 @@ int main(int argc, char* argv[]) {
 
         dt = 0.3 * std::min(t_f,t_c); 
 
-        if(DT > dt) { std::cout<<"ERROR: Time step too large. Decrease by "<<(DT-dt)<<std::endl; }
+        // if(DT > dt) { std::cout<<"ERROR: Time step too large. Decrease by "<<(DT-dt)<<std::endl; }
         });
     
 
@@ -365,7 +453,7 @@ int main(int argc, char* argv[]) {
     MyFile.close(); 
 
     t = clock() - t; 
-    double time_taken = ((double)t) / CLOCKS_PER_SEC; 
-    std::cout<<"RUN TIME: "<<time_taken<<"s"<<std::endl; 
+    double time_taken = ((double)t) / CLOCKS_PER_SEC;
+    std::cout<<"RUN TIME: "<<time_taken<<"s"<<std::endl;
 
 }
