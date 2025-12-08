@@ -20,32 +20,34 @@ Entity types:
 #include <flecs.h>
 #include <systems.h>
 
-double k_freq_calc = 3; 
-double particle_mass = 5; 
-float w1 = std::sqrt( k_freq_calc / particle_mass); // Frequency of the mass-spring system 
-int time_period = ( (2 * M_PI) / w1 ); // Time the spring system runs for in s 
-float time_step = 0.01; // Time elapsed in each time step 
-int run_time = time_period * 1/time_step; // Number of loops to run 
+
+double k = 4*M_PI*M_PI; // spring constant in N m-2
+double particle_mass = 3; // mass in kg
+double omega = std::sqrt((3*k)/(particle_mass)); // angular frequency in rad s-1
+int time_period = ( (2 * M_PI) / omega ); // period of oscillations in s
+int period_number = 2; // number of period oscillations
+float time_step = 0.0001; // Time elapsed in each time step in s
+int run_time = (period_number * time_period) / time_step; // Number of loops to run 
 
 int N = 2; // Number of particles in the system
 
 //Position of the Left Wall
-double p_Lwall = 0;  // in cm
+double p_Lwall = 0;  // in m
 
 // Position of the Right Wall
-double p_Rwall = 12; // in cm
+double p_Rwall = 3; // in m
 
 struct Index {
     int i; // Which particle is it
 };
 struct Position { 
-    double x; // In cm
+    double x; // In m
 };
 struct Velocity { 
-    double x; // In cms-1
+    double x; // In ms-1
 };
 struct Acceleration{
-    double x; // in cms-2
+    double x; // in ms-2
 };
 struct Mass{
     double M; // in kg
@@ -74,16 +76,16 @@ int main() {
         return 1; 
     }
     MyFile << "No iterations: " << run_time << std::endl;
-    MyFile << "Time (s), Position 1 (cm), Velocity 1 (cm s-1), Acceleration 1 (cm s-2)" 
-           << ", Position 2 (cm), Velocity 2 (cm s-1), Acceleration 2 (cm s-2)" << std::endl;
+    MyFile << "Time (s), Position 1 (m), Velocity 1 (m s-1), Acceleration 1 (m s-2)" 
+           << ", Position 2 (m), Velocity 2 (m s-1), Acceleration 2 (m s-2)" << std::endl;
 
     // First Particle Data
-    std::vector<std::vector<double>> p_matrix {{4}, {8}}; 
+    std::vector<std::vector<double>> p_matrix {{1}, {2}}; 
     std::vector<std::vector<double>> v_matrix {{-1}, {1}};
     std::vector<std::vector<double>> a_matrix {{0}, {0}};
 
-    const std::vector<double> k_list {3, 3, 3}; // Spring Constants
-    const std::vector<double> l_list {4, 4, 4}; // Natural Spring Lengths
+    const std::vector<double> k_list {k, k, k}; // Spring Constants
+    const std::vector<double> l_list {1, 1, 1}; // Natural Spring Lengths
     
     flecs::world ecs;
 
@@ -127,36 +129,19 @@ int main() {
         std::cout << e.name() << ": {" << p.x << ", " << v.x << "," << a.x << "}\n";
     });
 
-    // Particle prefab, a template that we can use to generate entities
-    ecs.prefab<Particle>()
-        .set<Index>({})
-        .set<Mass>({})
-        .set<Position>({})
-        .set<Velocity>({})
-        .set<Acceleration>({});
-
-    flecs::entity particle0 = ecs.entity().is_a<Particle>()
+    ecs.entity("particle 1")
         .set<Index>({0})
-        .set<Mass>({4})
+        .set<Mass>({particle_mass})
         .set<Position>({p_matrix[0][0]})
-        .set<Velocity>({v_matrix[0][0]});
+        .set<Velocity>({v_matrix[0][0]})
+        .set<Acceleration>({0});
 
-    flecs::entity particle1 = ecs.entity().is_a<Particle>()
+    ecs.entity("particle 2")
         .set<Index>({1})
-        .set<Mass>({4})
+        .set<Mass>({particle_mass})
         .set<Position>({p_matrix[1][0]})
-        .set<Velocity>({v_matrix[1][0]});
-
-    // *** This loop wasn't working as expected. Led to incorrect data beign written in file
-    // for(int i = 0; i < N; i++)
-    // {
-    //     flecs::entity particle = ecs.entity().is_a(Particle); 
-    //     particle.set(Index{i});
-    //     particle.set(Position{p_matrix[0][0]});
-    //     particle.set(Velocity{v_matrix[0][0]});
-    //     particle.set(Acceleration{0}); 
-    //     particle.set(Mass{particle_mass});
-    // }
+        .set<Velocity>({v_matrix[1][0]})
+        .set<Acceleration>({0});
 
     s1.run();
 
@@ -166,11 +151,11 @@ int main() {
         s2.run();
         std::cout << "----\n";
     }
-    for(int i = 0; i < run_time; i++) 
+    for(int i = 0; i <= run_time; i++) 
     {
         MyFile << i*time_step << ", " << p_matrix[0][i] << ", " << v_matrix[0][i] << "," << a_matrix[0][i] << "," 
                << p_matrix[1][i] << ", " << v_matrix[1][i] << "," << a_matrix[1][i] << std::endl; 
     }
     MyFile.close();
-    
+    std::cout << time_period << "\n";
 }
