@@ -39,4 +39,4 @@
 20
 ----
 1
-[ccenergy-summary] label=OnUpdate frames_seconds=0.000 cpu_joules=0.000 gpu_joules=0.000 total_joules=0.000 avg_watts=0.000
+[ccenergy-summary] label=OnUpdate frames_seconds=0.001 cpu_joules=0.023 gpu_joules=0.000 total_joules=0.023 avg_watts=24.603
