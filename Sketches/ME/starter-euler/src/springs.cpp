@@ -174,6 +174,12 @@ int main(int argc, char* argv[]) {
                                     k_list[ind.i+1], l_list[ind.i], l_list[ind.i+1]);
         });
     
+    world.system<>()
+        .kind(flecs::PostUpdate)
+        .each([&]() {
+            auto r = energy_tracker.stop();
+        });
+    
     world.progress();
     const Position& p1 = nodes[0].get<Position>();
     const Position& p2 = nodes[1].get<Position>();
