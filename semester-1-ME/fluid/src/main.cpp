@@ -657,6 +657,5 @@ int main(int argc, char *argv[]) {
             MyFile_v.close();
             MyFile_rho.close();
         }
-        
     }   
 }
