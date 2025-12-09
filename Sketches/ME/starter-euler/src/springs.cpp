@@ -12,6 +12,7 @@ and acceleration of each entity for which that is relevant.
 Entity types:
  - Particle
 */
+#include <ccenergy/EnergyTracker.hpp>
 
 #include <iostream>
 #include <fstream> 
@@ -26,7 +27,7 @@ double particle_mass = 3; // mass in kg
 double omega = std::sqrt((3*k)/(particle_mass)); // angular frequency in rad s-1
 int time_period = ( (2 * M_PI) / omega ); // period of oscillations in s
 int period_number = 2; // number of period oscillations
-float time_step = 0.0001; // Time elapsed in each time step in s
+float time_step = 0.1; // Time elapsed in each time step in s
 int run_time = (period_number * time_period) / time_step; // Number of loops to run 
 
 int N = 2; // Number of particles in the system
@@ -87,6 +88,12 @@ int main(int argc, char* argv[]) {
     
     flecs::world world(argc, argv);
 
+    // Create the energy tracker
+    ccenergy::EnergyTracker energy_tracker {{ .label = "OnUpdate",
+                                              .measure_cpu = true,
+                                              .measure_gpu  = false,
+                                              .log_to_stdout = false }};
+
     // Creates Phases which tell the program in which order to run the systems
 
     flecs::entity position_phase = world.entity()
@@ -123,6 +130,12 @@ int main(int argc, char* argv[]) {
                 .set<Acceleration>({0})
             );
     }
+
+    world.system<>()
+        .kind(flecs::PreUpdate)
+        .each([&]() {
+            energy_tracker.start();
+        });
 
     world.system<Position, Velocity>()
         .with<BulkTag>()
@@ -170,9 +183,9 @@ int main(int argc, char* argv[]) {
     const Acceleration& a2 = nodes[1].get<Acceleration>();
     MyFile << 0 << ", " << p1.x << ", " << v1.x << "," << a1.x << "," << p2.x << ", " 
     << v2.x << "," << a2.x << std::endl; 
-    
-    for (auto& i : nodes) {
-        	i.add<BulkTag>();
+    // Add Bulk tag to each entity in nodes
+    for (flecs::entity& e : nodes) {
+        	e.add<BulkTag>(); 
     }
 
     // Run the system
@@ -192,5 +205,5 @@ int main(int argc, char* argv[]) {
     }
     MyFile.close();
     std::cout << time_period << "\n";
-    
+    std::cout << energy_tracker.mkReport() << std::endl;
 }
