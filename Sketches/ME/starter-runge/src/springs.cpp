@@ -12,6 +12,7 @@ and acceleration of each entity for which that is relevant.
 Entity types:
  - Particle
 */
+#include <ccenergy/EnergyTracker.hpp>
 #include <iostream>
 #include <fstream> 
 #include <vector>
@@ -25,7 +26,7 @@ double particle_mass = 3; // mass in kg
 double omega = std::sqrt((3*k)/(particle_mass)); // angular frequency in rad s-1
 int time_period = ( (2 * M_PI) / omega ); // period of oscillations in s
 int period_number = 2; // number of period oscillations
-float time_step = 0.00001; // Time elapsed in each time step in s
+float time_step = 0.1; // Time elapsed in each time step in s
 int run_time = (period_number * time_period) / time_step; // Number of loops to run 
 
 int N = 2; // Number of particles in the system
@@ -59,11 +60,6 @@ struct AccelerationStart { double x;};
 struct AccelerationHalfPredict { double x;};
 struct AccelerationHalfCorrect { double x;};
 struct AccelerationEndPredict { double x;};
-// Runge Kutta functions
-struct FunctionsFirst { double x, v, a; };
-struct FunctionsSecond { double x, v, a; };
-struct FunctionsThird { double x, v, a; };
-struct FunctionsFourth { double x, v, a; };
 // Mass component
 struct Mass{ double M;};
 // Bulk tag ensure some code doesnt run on initial loop
@@ -97,27 +93,42 @@ int main(int argc, char* argv[]) {
     
     flecs::world world(argc, argv);
 
+    // Create the energy tracker
+    ccenergy::EnergyTracker energy_tracker {{ .label = "OnUpdate",
+                                              .measure_cpu = true,
+                                              .measure_gpu  = false,
+                                              .log_to_stdout = false }};
+
     // Creates Phases which tell the program in which order to run the systems
-
+    flecs::entity EnergyStart = world.entity()
+        .add(flecs::Phase);
     flecs::entity RK1 = world.entity()
-        .add(flecs::Phase); // This Phase calculates the new position
-
-    flecs::entity RK2 = world.entity()
-        .add(flecs::Phase) // This Phase calculates the new velocity
+        .add(flecs::Phase)
+        .depends_on(EnergyStart);
+    flecs::entity A1 = world.entity()
+        .add(flecs::Phase)
         .depends_on(RK1);
-    
-    flecs::entity RK3 = world.entity()
-        .add(flecs::Phase) // This Phase calculates the new acceleration
+    flecs::entity RK2 = world.entity()
+        .add(flecs::Phase)
+        .depends_on(A1);
+    flecs::entity A2 = world.entity()
+        .add(flecs::Phase)
         .depends_on(RK2);
-
-    flecs::entity RK4 = world.entity()
-        .add(flecs::Phase) // This Phase calculates the new acceleration
+    flecs::entity RK3 = world.entity()
+        .add(flecs::Phase)
+        .depends_on(A2);
+    flecs::entity A3 = world.entity()
+        .add(flecs::Phase)
         .depends_on(RK3);
-
-    flecs::entity Update = world.entity()
-        .add(flecs::Phase) // This Phase calculates the new acceleration
-        .depends_on(RK4);
-
+    flecs::entity RK_Update = world.entity()
+        .add(flecs::Phase)
+        .depends_on(A3);
+    flecs::entity A_Update = world.entity()
+        .add(flecs::Phase)
+        .depends_on(RK_Update);
+    flecs::entity EnergyEnd = world.entity()
+        .add(flecs::Phase)
+        .depends_on(A_Update);
 
     // Create components inside world
     world.component<Index>();
@@ -133,10 +144,6 @@ int main(int argc, char* argv[]) {
     world.component<AccelerationHalfPredict>();
     world.component<AccelerationHalfCorrect>();
     world.component<AccelerationEndPredict>();
-    world.component<FunctionsFirst>();
-    world.component<FunctionsSecond>();
-    world.component<FunctionsThird>();
-    world.component<FunctionsFourth>();
     world.component<Mass>();
     world.component<BulkTag>();
 
@@ -162,60 +169,168 @@ int main(int argc, char* argv[]) {
                 .set<AccelerationHalfPredict>({0})
                 .set<AccelerationHalfCorrect>({0})
                 .set<AccelerationEndPredict>({0})
-                .set<FunctionsFirst>({0, 0, 0})
-                .set<FunctionsSecond>({0, 0, 0})
-                .set<FunctionsThird>({0, 0, 0})
-                .set<FunctionsFourth>({0, 0, 0})
             );
     }
-    
+
     world.system<>()
-        .with<BulkTag>
-
-    world.system<Position, Velocity>()
-        .with<BulkTag>()
-        .kind(position_phase)
-        .each([&](Position& pos, Velocity& vel){
-            pos.x += vel.x*time_step;
-        });
-
-    world.system<Velocity, Acceleration>()
-        .with<BulkTag>()
-        .kind(velocity_phase)
-        .each([&](Velocity& vel, Acceleration& acc){
-            vel.x += acc.x*time_step;
+        .kind(EnergyStart)
+        .each([&]() {
+            energy_tracker.start();
         });
     
-    world.system<Index, Position, Acceleration, Mass>()
-        .kind(acceleration_phase)
-        .each([&](Index& ind, Position& pos, Acceleration& acc, Mass& mass){
+    world.system<PositionStart, PositionHalfPredict, VelocityStart, VelocityHalfPredict,
+                 AccelerationStart>()
+        .with<BulkTag>()
+        .kind(RK1)
+        .each([&](PositionStart& posStart, PositionHalfPredict& posHalf, VelocityStart& velStart, 
+        VelocityHalfPredict& velHalf, AccelerationStart& accStart){
+            posHalf.x = posStart.x + ((time_step/2)*velStart.x);
+            velHalf.x = velStart.x + ((time_step/2)*accStart.x);
+        });
+
+    world.system<Index, PositionHalfPredict, AccelerationHalfPredict, Mass>()
+        .with<BulkTag>()
+        .kind(A1)
+        .each([&](Index& ind, PositionHalfPredict& pos, AccelerationHalfPredict& acc, Mass& mass){
             double p_left;
             double p_right;
             if (ind.i == 0) {
                 p_left = p_Lwall;
-                const Position& p_r = nodes[ind.i + 1].get<Position>();
+                const PositionHalfPredict& p_r = nodes[ind.i + 1].get<PositionHalfPredict>();
                 p_right = p_r.x;
             } else if (ind.i == N-1) {
-                const Position& p_l = nodes[ind.i - 1].get<Position>();
+                const PositionHalfPredict& p_l = nodes[ind.i - 1].get<PositionHalfPredict>();
                 p_left = p_l.x;
                 p_right = p_Rwall;
             } else {
-                const Position& p_l = nodes[ind.i - 1].get<Position>();
+                const PositionHalfPredict& p_l = nodes[ind.i - 1].get<PositionHalfPredict>();
                 p_left = p_l.x;
-                const Position& p_r = nodes[ind.i + 1].get<Position>();
+                const PositionHalfPredict& p_r = nodes[ind.i + 1].get<PositionHalfPredict>();
+                p_right = p_r.x;
+            }
+        acc.x = acceleration(pos.x, p_left, p_right, mass.M, k_list[ind.i], 
+                                    k_list[ind.i+1], l_list[ind.i], l_list[ind.i+1]);
+        });
+
+    world.system<PositionStart, PositionHalfCorrect, VelocityStart, 
+                 VelocityHalfPredict, VelocityHalfCorrect, AccelerationHalfPredict>()
+        .with<BulkTag>()
+        .kind(RK2)
+        .each([&](PositionStart& posStart, PositionHalfCorrect& posCorr,  VelocityStart& velStart, 
+        VelocityHalfPredict& velPred, VelocityHalfCorrect& velCorr, 
+        AccelerationHalfPredict& accPred){
+            posCorr.x = posStart.x + ((time_step/2)*velPred.x);
+            velCorr.x = velStart.x + ((time_step/2)*accPred.x);
+        });
+
+    world.system<Index, PositionHalfCorrect, AccelerationHalfCorrect, Mass>()
+        .with<BulkTag>()
+        .kind(A2)
+        .each([&](Index& ind, PositionHalfCorrect& pos, AccelerationHalfCorrect& acc, Mass& mass){
+            double p_left;
+            double p_right;
+            if (ind.i == 0) {
+                p_left = p_Lwall;
+                const PositionHalfCorrect& p_r = nodes[ind.i + 1].get<PositionHalfCorrect>();
+                p_right = p_r.x;
+            } else if (ind.i == N-1) {
+                const PositionHalfCorrect& p_l = nodes[ind.i - 1].get<PositionHalfCorrect>();
+                p_left = p_l.x;
+                p_right = p_Rwall;
+            } else {
+                const PositionHalfCorrect& p_l = nodes[ind.i - 1].get<PositionHalfCorrect>();
+                p_left = p_l.x;
+                const PositionHalfCorrect& p_r = nodes[ind.i + 1].get<PositionHalfCorrect>();
+                p_right = p_r.x;
+            }
+        acc.x = acceleration(pos.x, p_left, p_right, mass.M, k_list[ind.i], 
+                                    k_list[ind.i+1], l_list[ind.i], l_list[ind.i+1]);
+        });
+
+    world.system<PositionStart, PositionEndPredict, VelocityStart, VelocityHalfCorrect, 
+                 VelocityEndPredict, AccelerationHalfCorrect>()
+        .with<BulkTag>()
+        .kind(RK3)
+        .each([&](PositionStart& posStart, PositionEndPredict& posEnd, VelocityStart& velStart, 
+        VelocityHalfCorrect& velHalf, VelocityEndPredict& velEnd, AccelerationHalfCorrect& accHalf){
+            posEnd.x = posStart.x + ((time_step/2)*velHalf.x);
+            velEnd.x = velStart.x + ((time_step/2)*accHalf.x);
+        });
+
+    world.system<Index, PositionEndPredict, AccelerationEndPredict, Mass>()
+        .with<BulkTag>()
+        .kind(A3)
+        .each([&](Index& ind, PositionEndPredict& pos, AccelerationEndPredict& acc, Mass& mass){
+            double p_left;
+            double p_right;
+            if (ind.i == 0) {
+                p_left = p_Lwall;
+                const PositionEndPredict& p_r = nodes[ind.i + 1].get<PositionEndPredict>();
+                p_right = p_r.x;
+            } else if (ind.i == N-1) {
+                const PositionEndPredict& p_l = nodes[ind.i - 1].get<PositionEndPredict>();
+                p_left = p_l.x;
+                p_right = p_Rwall;
+            } else {
+                const PositionEndPredict& p_l = nodes[ind.i - 1].get<PositionEndPredict>();
+                p_left = p_l.x;
+                const PositionEndPredict& p_r = nodes[ind.i + 1].get<PositionEndPredict>();
+                p_right = p_r.x;
+            }
+        acc.x = acceleration(pos.x, p_left, p_right, mass.M, k_list[ind.i], 
+                                    k_list[ind.i+1], l_list[ind.i], l_list[ind.i+1]);
+        });
+
+    world.system<PositionStart, VelocityStart, VelocityHalfPredict, VelocityHalfCorrect, 
+                 VelocityEndPredict, AccelerationStart, AccelerationHalfPredict, 
+                 AccelerationHalfCorrect, AccelerationEndPredict>()
+        .with<BulkTag>()
+        .kind(RK_Update)
+        .each([&](PositionStart& pos, VelocityStart& velStart, VelocityHalfPredict& velPred, 
+        VelocityHalfCorrect& velCorr, VelocityEndPredict& velEnd, AccelerationStart& accStart, 
+        AccelerationHalfPredict& accPred, AccelerationHalfCorrect& accCorr, 
+        AccelerationEndPredict& accEnd){
+            pos.x += ((time_step/6)*(velStart.x+2*velPred.x+2*velCorr.x+velEnd.x));
+            velStart.x += ((time_step/6)*(accStart.x+2*accPred.x+2*accCorr.x+accEnd.x));
+        });
+
+    world.system<Index, PositionStart, AccelerationStart, Mass>()
+        .kind(A_Update)
+        .each([&](Index& ind, PositionStart& pos, AccelerationStart& acc, Mass& mass){
+            double p_left;
+            double p_right;
+            if (ind.i == 0) {
+                p_left = p_Lwall;
+                const PositionStart& p_r = nodes[ind.i + 1].get<PositionStart>();
+                p_right = p_r.x;
+            } else if (ind.i == N-1) {
+                const PositionStart& p_l = nodes[ind.i - 1].get<PositionStart>();
+                p_left = p_l.x;
+                p_right = p_Rwall;
+            } else {
+                const PositionStart& p_l = nodes[ind.i - 1].get<PositionStart>();
+                p_left = p_l.x;
+                const PositionStart& p_r = nodes[ind.i + 1].get<PositionStart>();
                 p_right = p_r.x;
             }
         acc.x = acceleration(pos.x, p_left, p_right, mass.M, k_list[ind.i], 
                                     k_list[ind.i+1], l_list[ind.i], l_list[ind.i+1]);
         });
     
+     world.system<>()
+        .kind(EnergyEnd)
+        .each([&]() {
+            auto r = energy_tracker.stop();
+        });
+    
+    
     world.progress();
-    const Position& p1 = nodes[0].get<Position>();
-    const Position& p2 = nodes[1].get<Position>();
-    const Velocity& v1 = nodes[0].get<Velocity>();
-    const Velocity& v2 = nodes[1].get<Velocity>();
-    const Acceleration& a1 = nodes[0].get<Acceleration>();
-    const Acceleration& a2 = nodes[1].get<Acceleration>();
+    const PositionStart& p1 = nodes[0].get<PositionStart>();
+    const PositionStart& p2 = nodes[1].get<PositionStart>();
+    const VelocityStart& v1 = nodes[0].get<VelocityStart>();
+    const VelocityStart& v2 = nodes[1].get<VelocityStart>();
+    const AccelerationStart& a1 = nodes[0].get<AccelerationStart>();
+    const AccelerationStart& a2 = nodes[1].get<AccelerationStart>();
     MyFile << 0 << ", " << p1.x << ", " << v1.x << "," << a1.x << "," << p2.x << ", " 
     << v2.x << "," << a2.x << std::endl; 
     // Add Bulk tag to each entity in nodes
@@ -229,12 +344,12 @@ int main(int argc, char* argv[]) {
         std::cout << i << "\n";
         std::cout << "----\n";
 
-        const Position& p1 = nodes[0].get<Position>();
-        const Position& p2 = nodes[1].get<Position>();
-        const Velocity& v1 = nodes[0].get<Velocity>();
-        const Velocity& v2 = nodes[1].get<Velocity>();
-        const Acceleration& a1 = nodes[0].get<Acceleration>();
-        const Acceleration& a2 = nodes[1].get<Acceleration>();
+        const PositionStart& p1 = nodes[0].get<PositionStart>();
+        const PositionStart& p2 = nodes[1].get<PositionStart>();
+        const VelocityStart& v1 = nodes[0].get<VelocityStart>();
+        const VelocityStart& v2 = nodes[1].get<VelocityStart>();
+        const AccelerationStart& a1 = nodes[0].get<AccelerationStart>();
+        const AccelerationStart& a2 = nodes[1].get<AccelerationStart>();
         MyFile << i*time_step << ", " << p1.x << ", " << v1.x << "," << a1.x << "," << p2.x << ", " 
         << v2.x << "," << a2.x << std::endl; 
     }
