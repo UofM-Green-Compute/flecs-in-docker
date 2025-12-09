@@ -25,7 +25,7 @@ double particle_mass = 3; // mass in kg
 double omega = std::sqrt((3*k)/(particle_mass)); // angular frequency in rad s-1
 int time_period = ( (2 * M_PI) / omega ); // period of oscillations in s
 int period_number = 2; // number of period oscillations
-float time_step = 0.005; // Time elapsed in each time step in s
+float time_step = 0.001; // Time elapsed in each time step in s
 int run_time = (period_number * time_period) / time_step; // Number of loops to run 
 
 int N = 2; // Number of particles in the system
