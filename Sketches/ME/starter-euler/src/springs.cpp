@@ -179,7 +179,6 @@ int main(int argc, char* argv[]) {
         .each([&]() {
             auto r = energy_tracker.stop();
         });
-
     
     world.progress();
     const Position& p1 = nodes[0].get<Position>();
