@@ -173,6 +173,12 @@ int main(int argc, char* argv[]) {
         acc.x = acceleration(pos.x, p_left, p_right, mass.M, k_list[ind.i], 
                                     k_list[ind.i+1], l_list[ind.i], l_list[ind.i+1]);
         });
+
+    world.system<>()
+        .kind(flecs::PostUpdate)
+        .each([&]() {
+            auto r = energy_tracker.stop();
+        });
     
     world.progress();
     const Position& p1 = nodes[0].get<Position>();
