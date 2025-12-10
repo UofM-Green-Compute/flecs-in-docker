@@ -1,5 +1,5 @@
 /*
-This code runs a simulation of N coupled oscillators.
+This code runs a simulation of 2 coupled oscillators.
 
 Each mass has equations of motion depending on the properties
 the springs it is connected to. 
@@ -8,11 +8,7 @@ First the acceleration of each particle is computed.
 
 Than the program iterates to update the position, velocity, 
 and acceleration of each entity for which that is relevant.
-
-Entity types:
- - Particle
 */
-#include <ccenergy/EnergyTracker.hpp>
 #include <iostream>
 #include <fstream> 
 #include <vector>
@@ -26,7 +22,7 @@ double particle_mass = 3; // mass in kg
 double omega = std::sqrt((3*k)/(particle_mass)); // angular frequency in rad s-1
 int time_period = ( (2 * M_PI) / omega ); // period of oscillations in s
 int period_number = 2; // number of period oscillations
-float time_step = 0.1; // Time elapsed in each time step in s
+float time_step = 0.00001; // Time elapsed in each time step in s
 int run_time = (period_number * time_period) / time_step; // Number of loops to run 
 
 int N = 2; // Number of particles in the system
@@ -77,8 +73,9 @@ const float mass, float k_left, float k_right, float l_left, float l_right)
 
 int main(int argc, char* argv[]) {
 
-    std::ofstream MyFile; 
-    MyFile.open("Coupled_Oscillators.txt");
+    std::ofstream MyFile;
+    std::string fileName="Coupled_Oscillators_step=" + std::to_string(time_step) + ".txt";
+    MyFile.open(fileName);
     if (!MyFile.is_open())
     {
         std::cout<<"Error in creating file"<<std::endl; 
@@ -93,18 +90,9 @@ int main(int argc, char* argv[]) {
     
     flecs::world world(argc, argv);
 
-    // Create the energy tracker
-    ccenergy::EnergyTracker energy_tracker {{ .label = "OnUpdate",
-                                              .measure_cpu = true,
-                                              .measure_gpu  = false,
-                                              .log_to_stdout = false }};
-
     // Creates Phases which tell the program in which order to run the systems
-    flecs::entity EnergyStart = world.entity()
-        .add(flecs::Phase);
     flecs::entity RK1 = world.entity()
-        .add(flecs::Phase)
-        .depends_on(EnergyStart);
+        .add(flecs::Phase);
     flecs::entity A1 = world.entity()
         .add(flecs::Phase)
         .depends_on(RK1);
@@ -126,9 +114,6 @@ int main(int argc, char* argv[]) {
     flecs::entity A_Update = world.entity()
         .add(flecs::Phase)
         .depends_on(RK_Update);
-    flecs::entity EnergyEnd = world.entity()
-        .add(flecs::Phase)
-        .depends_on(A_Update);
 
     // Create components inside world
     world.component<Index>();
@@ -172,12 +157,6 @@ int main(int argc, char* argv[]) {
             );
     }
 
-    world.system<>()
-        .kind(EnergyStart)
-        .each([&]() {
-            energy_tracker.start();
-        });
-    
     world.system<PositionStart, PositionHalfPredict, VelocityStart, VelocityHalfPredict,
                  AccelerationStart>()
         .with<BulkTag>()
@@ -316,13 +295,6 @@ int main(int argc, char* argv[]) {
         acc.x = acceleration(pos.x, p_left, p_right, mass.M, k_list[ind.i], 
                                     k_list[ind.i+1], l_list[ind.i], l_list[ind.i+1]);
         });
-    
-     world.system<>()
-        .kind(EnergyEnd)
-        .each([&]() {
-            auto r = energy_tracker.stop();
-        });
-    
     
     world.progress();
     const PositionStart& p1 = nodes[0].get<PositionStart>();

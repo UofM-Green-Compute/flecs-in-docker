@@ -25,7 +25,7 @@ double particle_mass = 3; // mass in kg
 double omega = std::sqrt((3*k)/(particle_mass)); // angular frequency in rad s-1
 int time_period = ( (2 * M_PI) / omega ); // period of oscillations in s
 int period_number = 2; // number of period oscillations
-float time_step = 0.00001; // Time elapsed in each time step in s
+float time_step = 0.005; // Time elapsed in each time step in s
 int run_time = (period_number * time_period) / time_step; // Number of loops to run 
 
 int N = 2; // Number of particles in the system
@@ -70,15 +70,16 @@ const float mass, float k_left, float k_right, float l_left, float l_right)
 
 int main(int argc, char* argv[]) {
 
-    std::ofstream MyFile; 
-    MyFile.open("Coupled_Oscillators.txt");
+    std::ofstream MyFile;
+    std::string fileName="Coupled_Oscillators_step=" + std::to_string(time_step) + ".txt";
+    MyFile.open(fileName);
     if (!MyFile.is_open())
     {
-        std::cout<<"Error in creating file"<<std::endl; 
-        return 1; 
+        std::cout<<"Error in creating file"<<std::endl;
+        return 1;
     }
     MyFile << "No iterations: " << run_time << std::endl;
-    MyFile << "Time (s), Position 1 (m), Velocity 1 (m s-1), Acceleration 1 (m s-2)" 
+    MyFile << "Time (s), Position 1 (m), Velocity 1 (m s-1), Acceleration 1 (m s-2)"
            << ", Position 2 (m), Velocity 2 (m s-1), Acceleration 2 (m s-2)" << std::endl;
     
     const std::vector<double> k_list {k, k, k}; // Spring Constants
@@ -87,14 +88,11 @@ int main(int argc, char* argv[]) {
     flecs::world world(argc, argv);
 
     // Creates Phases which tell the program in which order to run the systems
-
     flecs::entity position_phase = world.entity()
         .add(flecs::Phase); // This Phase calculates the new position
-
     flecs::entity velocity_phase = world.entity()
         .add(flecs::Phase) // This Phase calculates the new velocity
         .depends_on(position_phase);
-    
     flecs::entity acceleration_phase = world.entity()
         .add(flecs::Phase) // This Phase calculates the new acceleration
         .depends_on(velocity_phase);
