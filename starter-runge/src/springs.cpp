@@ -355,4 +355,5 @@ int main(int argc, char* argv[]) {
     }
     MyFile.close();
     std::cout << time_period << "\n";
+    std::cout << energy_tracker.mkReport() << std::endl;
 }
