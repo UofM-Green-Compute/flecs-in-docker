@@ -1,0 +1,1 @@
+This folder is dedicated to the euler method formulation of the starter project which simulates two coupled oscillators

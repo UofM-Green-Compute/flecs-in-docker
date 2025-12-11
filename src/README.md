@@ -1,0 +1,1 @@
+Here there are different pieces of code that doesn't belong to one of the other folders such as starter-euler

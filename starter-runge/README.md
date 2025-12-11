@@ -1,0 +1,1 @@
+This folder is dedicated to the Runge Kutta method formulation of the starter project which simulates two coupled oscillators
