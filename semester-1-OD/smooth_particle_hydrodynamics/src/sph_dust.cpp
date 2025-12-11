@@ -2,15 +2,23 @@
 Oluwole Delano | 13/11/25 
 Simulating an ideal gas using smooth particle hydridynamics in ECS
 
-** Questions ** :
+** Questions / Next steps** :
 - Should I incluide "self" particle in density sums? 
   When self particle is included in force sums it leads to weird behaviour (strange attractor)
+- Rescale units 
 
-To add:
+** Results to extract ** 
+- Density plots at 6 time steps
+- Energy: Should be ~k_b * T * NO_PARTICLES | Calculate change in energy over simulations
+
+Possible extensions
+- More advanced time stepping (Runge-Kutta)
 - Classical limit of an ideal gas
-- Energy checks: Total energy should be = 3/2*k_b*T*NO_PARTICLES 
-- Model particle interactions: Lenard Jones potential --- do i need to do this? Does EOS do this for me?
+- Calculate total energy and check how well its conserved 
+- Put in Leannard Jones potential by hand? 
 
+** Sources **
+Spline Kernel: Monaghan SPH Review article 1992
 */
 
 #include <iostream>
@@ -33,38 +41,40 @@ struct ParticleIndex {int i; };
 struct Box {int k; }; 
 
 // Constants
-int NO_PARTICLES = 50; 
-const int STEPS = 1; // Number of time steps
-double DT = 0.0001;    // Time step 
+int NO_PARTICLES = 20; 
+const int STEPS = 4000; // Number of time steps
+double DT = 0.00001;    // Time step 
 double PARTICLE_MASS = 1.6735575 * pow(10,-27); // Mass of Hydrogen
+double TEST_SCALE_FACTOR = 1 * pow(10,30); 
+double GAMBEL_MASS = 20 ; // Choice used in Monaghan and Gingold 1979 
 
 // Walls of the box ----
 static constexpr double GX = 5;
 static constexpr double GY = 5;
 static constexpr double GX2 = 5;
 double SLIT_WIDTH = 1; 
-
-// Mathematical constants
-double CONST_H = 0.1;                 // Parameter determining size of domain around particle
+                  
 // Physical constants
-int T = 10;                          // Temperature 
-double ALPHA = 0;                     // Van-der-waals coefficient
-double BETA = 0;                      // Van-der-waals coefficient
+int T = 10;                           // Temperature 
+double ALPHA = 3.46 * pow(10,-3);     // Van-der-waals coefficient
+double BETA = 23.71 * pow(10,-6);     // Van-der-waals coefficient
 double K_B = 1.380649 * pow(10,-23);  // Units: m^2 kg s^-2 K^-1
 double SIGMA = 10 / (7 * M_PI);       // Normalisation constant for kernel in two dimensions
-int NO_DIMENSIONS = 2; 
+double NO_DIMENSIONS = 2.0; 
 double COURANT_NO = 1;                // Courant number
+// Mathematical constants
+double CONST_H = 1; // Parameter determining size of domain around particle 
 
 // Boltzman distribution
-// Probability that a particle has velocity between v and v+dv = dv * maxwell_boltzmann()
+// Probability that a particle has velocity between v and v+d^3v = dv * maxwell_boltzmann()
 double maxwell_boltzmann(double v)
 {
-    double norm = 4 * M_PI * pow((PARTICLE_MASS / (2*M_PI*K_B*T)),3.0/2.0) ;
+    double norm = pow( (PARTICLE_MASS / (2*M_PI*K_B*T)) , (3.0/2.0) ) ;
     double exponential = std::exp( - (PARTICLE_MASS * v*v) / (2 * K_B * T) );
-    return norm * v*v * exponential; 
+    return norm * exponential; 
 }
 
-// Metropolis-Hastings Algorithm
+// Metropolis-Hastings Algorithm -- Sampling from Maxwell-Boltzmann
 double metropolis_hastings(double x_i, double delta_i, double r)
 {
     double x_trial = x_i + delta_i; 
@@ -78,8 +88,25 @@ double metropolis_hastings(double x_i, double delta_i, double r)
     else { return x_i; }
 }
 
+double exact_gambel_density(double x){ return exp(-x - exp(-x)); }
+
+// Metropolis-Hastings Algorithm -- Sampling from Gambell density
+double metropolis_hastings_gambel(double x_i, double delta_i, double r)
+{
+
+    double x_trial = x_i + delta_i; 
+
+    double w_i = exact_gambel_density(x_i); 
+    double w_trial = exact_gambel_density(x_trial); 
+
+    double alpha = std::min(1.0,(w_trial/w_i)); 
+
+    if (r < alpha && (x_trial < GX) && (x_trial > -GX)) { return x_trial; }
+    else { return x_i; }
+}
+
 // Interpolant function (Gaussian) -- Monaghan 1992 Equation 2.6
-double gaussian_W(double r) { return ( 1 / CONST_H * sqrt(M_PI) ) * exp(( - pow(r,2) / pow(CONST_H,2) )); }
+double gaussian_W(double r, double h) { return ( 1 / (h * sqrt(M_PI)) ) * exp( - (pow(r,2.0) / pow(h,2.0)) ); }
 
 // Interpolant function 2 (Spline) -- Monaghan 1992 Section 7
 double spline_W(double r) { 
@@ -88,7 +115,7 @@ double spline_W(double r) {
 
     if( (q >= 0) && (q <= 1) )
     {
-        return c * (1 - ( (3/2) * pow(q,2) ) + ( (3/4) * pow(q,3) )); 
+        return c * ( 1 - ((3/2) * pow(q,2)) + ((3/4) * pow(q,3)) ); 
     }
     else if( (q >= 1) && (q <= 2) )
     {
@@ -101,7 +128,7 @@ double spline_W(double r) {
 
 // Function to calculate vector distance between particles 
 std::vector<double> vector_distance(std::vector<double> position_r, flecs::entity Particle_i){
-    std::vector<double> displacement{0.0,0.0}; 
+    std::vector<double> displacement; 
 
     Position p_i = Particle_i.get<Position>();
 
@@ -111,13 +138,14 @@ std::vector<double> vector_distance(std::vector<double> position_r, flecs::entit
     return displacement; 
 }
 
+// Function to calculate the absolute magnitude of a vector
 double absolute_distance(std::vector<double> displacement){
     double sum = 0; 
     for (int i = 0; i < displacement.size(); i++) { sum += displacement[i]*displacement[i]; }
     return sqrt(sum); 
 }
 
-// Function to caluclate density rho at the position of some particle
+// Function to caluclate density rho at some position
 double density(std::vector<double> position_r, std::vector<flecs::entity> Particles){
     double Density = 0; 
 
@@ -125,8 +153,22 @@ double density(std::vector<double> position_r, std::vector<flecs::entity> Partic
     {
         std::vector<double> distance_vec = vector_distance(position_r,Particles[j]); 
         double R = absolute_distance(distance_vec);  
-        Density += Particles[j].get<Mass>().m * spline_W(R) ; 
+        Density += Particles[j].get<Mass>().m * gaussian_W(R,CONST_H); 
     }
+
+    return Density; 
+}
+
+// Function to caluclate density rho at some position
+double density_gambel(double position_r, std::vector<double> configuration, double h){
+    double Density = 0; 
+
+    for (int j=0; j<configuration.size(); j++)
+    {
+        double R = position_r - configuration[j]; 
+        Density += GAMBEL_MASS * gaussian_W(R,h); 
+    }
+
     return Density; 
 }
 
@@ -140,8 +182,8 @@ std::vector<double> grad_gaussian_W(flecs::entity p_a, flecs::entity p_b)
     std::vector<double> vec_distance = vector_distance(pos_a,p_b); 
     double R = absolute_distance(vec_distance); 
     std::vector<double> grad; 
-
-    for(int i = 0; i < vec_distance.size(); i++) { grad.push_back( (2 / (CONST_H*CONST_H)) * vec_distance[i] * gaussian_W(R)); }
+                                                                                                               // ! Spline XXXX 
+    for(int i = 0; i < vec_distance.size(); i++) { grad.push_back( - (2 / (CONST_H*CONST_H)) * vec_distance[i] * gaussian_W(R,CONST_H)); }
 
     return grad; 
 } 
@@ -149,6 +191,7 @@ std::vector<double> grad_gaussian_W(flecs::entity p_a, flecs::entity p_b)
 // Gradient of Spline Interpolant Function
 std::vector<double> grad_spline_W(flecs::entity p_a, flecs::entity p_b)
 {
+    // Get the vector position of particle a
     std::vector<double> pos_a; 
     pos_a.push_back(p_a.get<Position>().x); 
     pos_a.push_back(p_a.get<Position>().y); 
@@ -168,8 +211,8 @@ std::vector<double> grad_spline_W(flecs::entity p_a, flecs::entity p_b)
     }
     else if( (q >= 1) && (q <= 2) )
     {
-        for(int i = 0; i < vec_distance.size(); i++) 
-        { grad.push_back( (-3 / 4) * ((2-q)*(2-q)) * vec_distance[i] ); }
+        for(int i = 0; i < vec_distance.size(); i++)  
+        { grad.push_back( (-3 / (4 * R * CONST_H) ) * ((2-q)*(2-q)) * vec_distance[i] ); } 
     }
     else {
         for(int i = 0; i < vec_distance.size(); i++) 
@@ -180,8 +223,9 @@ std::vector<double> grad_spline_W(flecs::entity p_a, flecs::entity p_b)
 }
 
 // Equations of state -- rho_i can be input into some equation of state to find pressure
+// Van der Waals equation of state to find pressure -- "A review of SPH" equation 
 double vdw_pressure(std::vector<flecs::entity> Particles, flecs::entity particle){
-    // Van der Waals equation of state to find pressure
+    
     double mass = particle.get<Mass>().m; 
 
     std::vector<double> particle_position; 
@@ -201,46 +245,51 @@ double vdw_pressure(std::vector<flecs::entity> Particles, flecs::entity particle
 std::vector<double> force(std::vector<flecs::entity> Particles, flecs::entity Particle_a){
     std::vector<double> Force = {0.0,0.0}; 
 
-    // Particle position
+    // Particle a position
     double x_a = Particle_a.get<Position>().x; 
     double y_a = Particle_a.get<Position>().y;
     std::vector<double> particle_a_position = {x_a,y_a};
 
-    // Particle mass
+    // Particle a mass
     double m_a = Particle_a.get<Mass>().m; 
 
-    // Calculate pressure at a
+    // Pressure at particle a
     double p_a = vdw_pressure(Particles, Particle_a);
 
-    // Calculate density at a
+    // Density at particle a
     double rho_a = density(particle_a_position,Particles);
 
     for(int i = 0; i < Particles.size()-1; i++)
     {
         // Particle doesn't feel force from itself
-        if(!(Particle_a.get<ParticleIndex>().i == Particles[i].get<ParticleIndex>().i))
+        if(! (Particle_a.get<ParticleIndex>().i == Particles[i].get<ParticleIndex>().i) )
         {
             double x_b = Particles[i].get<Position>().x;
             double y_b = Particles[i].get<Position>().y;
             std::vector<double> particle_b_position = {x_b,y_b}; 
 
-            // Particle distance
+            // Vector distance r_a - r_i --> Absolute distance R
             std::vector<double> disp = vector_distance(particle_a_position,Particles[i]); 
             double R = absolute_distance(disp);
 
+            // Particle i mass
             double m_b = Particles[i].get<Mass>().m;
 
+            // Pressure at particle i
             double p_b = vdw_pressure(Particles, Particles[i]);
 
+            // Desnity at particle i
             double rho_b = density(particle_b_position,Particles);
 
             // make into one constant
-            double constant = (m_a * m_b) * ( p_b / (pow(rho_b,2)) + p_a / (pow(rho_a,2)));
+            double constant = - (m_a * m_b) * ( p_b / (pow(rho_b,2)) + p_a / (pow(rho_a,2)) ); 
 
-            std::vector<double> grad_W = grad_spline_W(Particle_a, Particles[i]); 
+            // Gradient of W(r_a - r_i)
+            std::vector<double> grad_W = grad_gaussian_W(Particle_a, Particles[i]); 
 
             Force[0] += constant * grad_W[0]; 
             Force[1] += constant * grad_W[1];
+            
         }
     } 
     return Force; 
@@ -284,8 +333,18 @@ int main(int argc, char* argv[]) {
             return 1; 
         }
 
+    // Open file for writing - Gambel Density field file
+        std::ofstream MyFile_gambel;
+        MyFile_gambel.open("/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/smooth_particle_hydrodynamics/outputs/gambel_density_field.txt");
+        if (!MyFile_gambel.is_open())
+        {
+            std::cout<<"Error in opening file"<<std::endl; 
+            return 1; 
+        }
+
     // Create the flecs world
     flecs::world world(argc,argv);
+
     // Components of the world
     world.component<Position>(); 
     world.component<Velocity>(); 
@@ -295,83 +354,64 @@ int main(int argc, char* argv[]) {
 
     // Tools for picking random numbers
     std::mt19937 rng( std::random_device{}()  ) ; // Initialise a random number generator with random device (for actual use)
-
     std::uniform_real_distribution<double> UposX(0, GX); 
     std::uniform_real_distribution<double> UposY(0, GY); 
-    std::uniform_real_distribution<double> Uspd(0, 5000);
+    std::uniform_real_distribution<double> Uvel(-5000, 5000);
+    std::uniform_real_distribution<double> Ugambel(-GX, GX);
     std::uniform_real_distribution<double> ZeroOne(0, 1);
     std::uniform_real_distribution<double> DELTA(-0.1, 0.1);
-    // std::uniform_real_distribution<double> Umass(0.5, 2.0); 
+    std::uniform_real_distribution<double> DELTAGAMBEL(-0.1, 0.1);
 
     // Initialise entities | Generate random values for initial conditions
     std::vector<flecs::entity> particles; 
     particles.reserve(2*NO_PARTICLES); 
 
-    int stationary_time = 1000; // Time taken for Markov Chain to reach stationary state after random initialisation
-    int sample_interval = stationary_time; // 10000; // Number of time steps in bewteen taking samples of the distribution 
+    int stationary_time = 10000000; // Give Markov Chain time to reach stationary state after random initialisation
+    int sample_interval = 1000000;  // 10000; // Number of time steps in bewteen taking samples of the distribution 
 
+    // Create vectors to store initial values of velocity components
     std::vector<double> x_velocities; 
     x_velocities.reserve(NO_PARTICLES); 
     std::vector<double> y_velocities; 
     y_velocities.reserve(NO_PARTICLES);
+
+    // Create density matrix
     std::vector<std::vector<double>> density_matrix;
     density_matrix.reserve(GY*(GX+GX2)); 
 
-    double v_x = Uspd(rng);
-    double v_y = Uspd(rng); 
+    double v_x = Uvel(rng);
+    double v_y = Uvel(rng); 
     int j = 0; 
 
-    for(int i = 0; i < stationary_time + NO_PARTICLES*sample_interval + NO_PARTICLES; i++)
+    for(int i = 0; i < stationary_time + NO_PARTICLES*sample_interval; i++) // removed no_particles from i <
     {
-        /* 
         double r_x = ZeroOne(rng); 
         double delta_x = DELTA(rng); 
-        double v_x = metropolis_hastings(v_x,delta_x,r_x); 
-        if(i>=stationary_time){ x_velocities.push_back(v_x); }
+        double v_x = metropolis_hastings(v_x,delta_x,r_x); // remove double?? 
 
         double r_y = ZeroOne(rng); 
         double delta_y = DELTA(rng); 
         double v_y = metropolis_hastings(v_y,delta_y,r_y); 
-        if(i>=stationary_time){ y_velocities.push_back(v_y); }
-        */
-
-        double r_x = ZeroOne(rng); 
-        double delta_x = DELTA(rng); 
-        double v_x = metropolis_hastings(v_x,delta_x,r_x); 
-
-        double r_y = ZeroOne(rng); 
-        double delta_y = DELTA(rng); 
-        double v_y = metropolis_hastings(v_y,delta_y,r_y); 
-
-        // std::cout<<v_x<<std::endl; 
 
         if (i >= stationary_time)
         {
             j+=1; 
-            if(j=sample_interval){ x_velocities.push_back(v_x); y_velocities.push_back(v_y); j=0; }
-                // std::cout<<v_x<<std::endl; j=0; }
+            if(j==sample_interval) { x_velocities.push_back(v_x); y_velocities.push_back(v_y); j=0; }
         }
-        
     }
 
     for (int i = 0; i < NO_PARTICLES; ++i) { 
-        // Randomly make some of the velocities components negative
-        double a = 1;  
-        double rand = ZeroOne(rng); 
-        if (rand > 0.5 ) { a = -1; }
-        double b = 1;  
-        double randb = ZeroOne(rng); 
-        if (randb > 0.5 ) { b = -1; }
-
         particles.push_back( 
             world.entity() 
                 .set<ParticleIndex>({i}) 
                 .set<Position>({UposX(rng), UposY(rng)}) 
-                .set<Velocity>({a * x_velocities[i], b * y_velocities[i]}) 
+                .set<Velocity>({x_velocities[i], y_velocities[i]}) 
                 .set<Acceleration>({0.0, 0.0}) 
                 .set<Mass>({PARTICLE_MASS})
                 .set<Box>({0})); 
     } 
+
+    // Note: Systems run in order they are coded in
 
     // Write to file
     world.system<Position, Velocity>()
@@ -390,16 +430,15 @@ int main(int argc, char* argv[]) {
             int cy = int(std::floor(p.y));
             double x_tolerance = v.dx * DT; 
 
-            // Reflect particle for edge cases where position is at a wall after rounding
-
-            if ( ((cx < 0) || (cx >= GX+GX2)) ) { v.dx = -v.dx; a.ddx = -a.ddx;}
-            if ( (cy < 0) || (cy >= GY) ) { v.dy = -v.dy; a.ddy = -a.ddy; } 
+            // Reflect particle when position is at a wall after rounding
+            if ( ((cx < 0) || (cx >= GX+GX2)) ) { v.dx = -v.dx; }// a.ddx = -a.ddx;}
+            if ( (cy < 0) || (cy >= GY) ) { v.dy = -v.dy; } // a.ddy = -a.ddy; } 
 
             if ( b.k == 0 && ((p.y < (GY/2 - SLIT_WIDTH/2)) || (p.y > (GY/2 + SLIT_WIDTH/2))) )
-            { if ( (cx >= GX) )  { v.dx = -v.dx; a.ddx = -a.ddx;} }
+            { if ( (cx >= GX) )  { v.dx = -v.dx; } }// a.ddx = -a.ddx;} }
 
             else if (b.k == 1 && !( (p.y > (GY/2 - SLIT_WIDTH/2)) && (p.y < (GY/2 + SLIT_WIDTH/2)) ) )
-            { if ( (upx <= GX) )  { v.dx = -v.dx; a.ddx = -a.ddx;} }
+            { if ( (upx <= GX) )  { v.dx = -v.dx; } }// a.ddx = -a.ddx;} }
             else 
             { if (p.x > GX) {b.k = 1; } else {b.k = 0; }}
         });
@@ -423,7 +462,7 @@ int main(int argc, char* argv[]) {
             else if(t1<t_f) { t_f = t1; }
         }
 
-        // CFL condition
+        // CFL condition in the x and y directions
         double t_cx = 0;
         double t_cy = 0;
         for(int i = 0; i < particles.size(); i++){
@@ -436,20 +475,20 @@ int main(int argc, char* argv[]) {
             if (i == 0) { t_cy = t2; }
             else if(t2<t_cy) { t_cy = t2; }
         }
-        double t_c = std::min(t_cx,t_cy); 
 
+        // Find the minimum value of all these constraints
+        double t_c = std::min(t_cx,t_cy); 
         dt = 0.3 * std::min(t_f,t_c); 
 
-        // if(DT > dt) { std::cout<<"ERROR: Time step too large. Decrease by "<<(DT-dt)<<std::endl; }
+        if(DT > dt) { std::cout<<"ERROR: Time step too large. Decrease by "<<(DT-dt)<<std::endl; }
         });
-    
 
     // Update Acceleration
     world.system<Position, Velocity, Acceleration, Mass, ParticleIndex>()
         .each([&](Position& p, Velocity& v, Acceleration& a, Mass& m, ParticleIndex& index){
-        std::vector<double> Force = force(particles, particles[index.i]);
-        a.ddx = Force[0] / m.m;
-        a.ddy = Force[1] / m.m; 
+            std::vector<double> Force = force(particles, particles[index.i]);
+            a.ddx = Force[0] / m.m;
+            a.ddy = Force[1] / m.m; 
         });
 
     // Update velocity
@@ -470,23 +509,62 @@ int main(int argc, char* argv[]) {
     world.system<>()
         .each([&](){
 
-        for(int i = 0; i < (GX+GX2); i++)
+        for(int i = 0; i < GY+1; i++)
         {
-            for(int j = 0; j < GY; j++)
+            for(int j = 0; j < (GX+GX2)+1; j++)
             {
                 density_matrix[i].push_back(density({double(i),double(j)},particles)); 
-                MyFile_density<<density_matrix[i][j]<<","; 
+                if(j < (GX+GX2)) { MyFile_density<<density_matrix[i][j]<<","; }
+                else { MyFile_density<<density_matrix[i][j]<<std::endl; } 
             }
-            MyFile_density<<std::endl; 
         }
         });
+
+    // *** ERROR ANALYSIS - TEST SMOTHING FUNCTIONS WITH A KNOW DISTRIBUTION (Gambel density) ***
+    // Sample from Gambel density
+    double p_x = Ugambel(rng);
+    std::vector<double> particle_config; 
+    particle_config.reserve(NO_PARTICLES); 
+    int k = 0; 
+
+    for(int i = 0; i < stationary_time + NO_PARTICLES*sample_interval; i++) 
+    {
+        double rx = ZeroOne(rng); 
+        double deltax = DELTAGAMBEL(rng);
+
+        p_x = metropolis_hastings_gambel(p_x,deltax,rx); 
+
+        if (i >= stationary_time)
+        {
+            k+=1; 
+            if(k==sample_interval) { particle_config.push_back(p_x); k=0; }
+        }
+    }
+
+    // Calculate density from Gambel 
+    double h = 0;
+    for(int i = 0; i < 15; i++){
+        double sum = 0; 
+        double avg = 0; 
+
+        for(int j = 0; j < NO_PARTICLES; j++)
+        { sum += abs( exact_gambel_density(particle_config[j]) - density_gambel(particle_config[j],particle_config,h) ); }
+        // std::cout<<"Adding "<<sum<<std::endl; std::cout<<"Exact gambel "<<exact_gambel_density(particle_config[j])<<" "<<particle_config[j]<<std::endl; 
+        // std::cout<<"SUM "<<sum<<std::endl; 
+
+        avg = sum / NO_PARTICLES; 
+
+        MyFile_gambel<<h<<","<<avg<<std::endl;
+        h+=GX / 15; 
+    }
+
 
     for (int i = 0; i < STEPS; ++i) {
 
         std::cout<<i<<std::endl; 
 
         world.progress();
-        MyFile<<""<<std::endl; // End the line started in the write to file system
+        MyFile<<std::endl; // End the line started in the write to file system
 
     }
 
