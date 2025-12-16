@@ -1,0 +1,31 @@
+---
+pdf-engine: xelatex
+papersize: a4
+classoption: t
+theme: "Madrid"
+colortheme: "dolphin"
+mainfont: "LiberationSerif-Regular"
+fontsize: 10pt
+urlcolor: red
+linkstyle: bold
+aspectratio: 169
+toc: true
+monofont: UnTaza
+monofontoptions:
+  - Scale=0.8
+  - Path=fonts/
+mainfont: "LiberationSerif-Regular"
+mainfontoptions:
+  - BoldFont=UnDotumBold.ttf
+  - ItalicFont=LiberationSerif-Italic
+  - BoldItalicFont=LiberationSerif-BoldItalic
+  - Path=fonts/
+# fontsize: 13.5pt
+colorlinks: true
+linkcolor: blue
+linestretch: 1
+
+output: beamer_presentation
+header-includes:
+  - \usepackage{longtable,booktabs}
+---
