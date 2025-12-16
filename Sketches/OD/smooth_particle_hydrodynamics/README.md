@@ -1,1 +1,0 @@
-This directory contains code to simulate a gas using Smooth Particle Hydrodynamics 

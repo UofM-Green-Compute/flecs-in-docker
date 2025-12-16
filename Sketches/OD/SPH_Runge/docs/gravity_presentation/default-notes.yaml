@@ -1,0 +1,30 @@
+---
+pdf-engine: xelatex
+papersize: a4
+classoption: t
+mainfont: "LiberationSerif-Regular"
+fontsize: 12pt
+urlcolor: blue
+linkstyle: bold
+toc: true
+monofont: UnTaza
+monofontoptions:
+  - Scale=0.8
+  - Path=fonts/
+mainfont: "LiberationSerif-Regular"
+mainfontoptions:
+  - BoldFont=UnDotumBold.ttf
+  - ItalicFont=LiberationSerif-Italic
+  - BoldItalicFont=LiberationSerif-BoldItalic
+  - Path=fonts/
+colorlinks: true
+linkcolor: blue
+linestretch: 1
+geometry:
+  - lmargin=2cm
+  - rmargin=2cm
+  - top=1.5cm
+  - bottom=2.5cm
+header-includes:
+  - \usepackage{longtable,booktabs}
+---

@@ -34,6 +34,100 @@ def a2model(t):
     a = -omega**2*np.sqrt(mass/(3*k))*np.sin(omega*t)
     return a
 
+# *** Make a 2x2 grid of plots *** 
+
+# Open files
+root_folder = os.path.dirname(os.path.dirname(__file__))
+Euler_t005_path = os.path.join(root_folder, "outputs", f"Coupled_Oscillators_step={0.05:.6f}.txt") # E1 
+Euler_t001_path = os.path.join(root_folder, "outputs", f"Coupled_Oscillators_step={0.01:.6f}.txt") # E2
+Runge_t005_path = "/Users/oluwoledelano/ECS_Development/flecs-in-docker/starter-runge/outputs/Coupled_Oscillators_step=0.050000.txt"
+Runge_t001_path = "/Users/oluwoledelano/ECS_Development/flecs-in-docker/starter-runge/outputs/Coupled_Oscillators_step=0.010000.txt"
+
+# Save data from files into an array
+data_E1 = np.genfromtxt(Euler_t005_path, skip_header=2, delimiter=",") #
+time_E1 = data_E1[:,0]
+pos_E1 = data_E1[:,1]
+pos2_E1 = data_E1[:,4]
+
+data_E2 = np.genfromtxt(Euler_t001_path, skip_header=2, delimiter=",")
+time_E2 = data_E2[:,0]
+pos_E2 = data_E2[:,1]
+pos2_E2 = data_E2[:,4]
+
+data_R1 = np.genfromtxt(Runge_t005_path, skip_header=2, delimiter=",") #
+time_R1 = data_R1[:,0]
+pos_R1 = data_R1[:,1]
+pos2_R1 = data_R1[:,4]
+
+data_R2 = np.genfromtxt(Runge_t001_path, skip_header=2, delimiter=",")
+time_R2 = data_R2[:,0]
+pos_R2 = data_R2[:,1]
+pos2_R2 = data_R2[:,4]
+
+# *** Plot graphs ***
+
+# Graph formatting
+cm = 1/2.54 #cm in inches
+# mpl.rcParams['text.usetex'] = True
+mpl.rcParams.update({'font.size': 14})
+fig2, axs2 = plt.subplots(2, 2, figsize=(17*cm, 10*cm), layout="constrained")
+
+fig2.supxlabel("Time t/s")
+fig2.supylabel("Position x/s")
+for ax in axs2.flat:
+        ax.label_outer()
+        ax.tick_params(axis='both',direction='in')
+
+axs2[0,0].set_ylim(0,3)
+axs2[1,0].set_ylim(0,3)
+axs2[0,1].set_ylim(0,3)
+axs2[1,1].set_ylim(0,3)
+
+# Graph plotting 
+time_E1_analytical = np.linspace(0, np.max(time_E1), 10000)
+x1_E1_analytical = x1model(time_E1_analytical)
+x2_E1_analytical = x2model(time_E1_analytical)
+
+time_E2_analytical = np.linspace(0, np.max(time_E2), 10000)
+x1_E2_analytical = x1model(time_E2_analytical)
+x2_E2_analytical = x2model(time_E2_analytical)
+
+time_R1_analytical = np.linspace(0, np.max(time_R1), 10000)
+x1_R1_analytical = x1model(time_R1_analytical)
+x2_R1_analytical = x2model(time_R1_analytical)
+
+time_R2_analytical = np.linspace(0, np.max(time_R2), 10000)
+x1_R2_analytical = x1model(time_R2_analytical)
+x2_R2_analytical = x2model(time_R2_analytical)
+
+axs2[0,0].plot(time_E1, pos_E1, color = "k", linestyle = "--", label="Particle 1 Simulated")
+axs2[0,0].plot(time_E1_analytical, x1_E1_analytical, color = "k", label = "Particle 1 Analytical")
+axs2[0,0].plot(time_E1, pos2_E1, color = "tab:red", linestyle = "--", label="Particle 2 Simulated")
+axs2[0,0].plot(time_E1_analytical, x2_E1_analytical, color = "tab:red", label = "Particle 2 Analytical")
+
+axs2[1,0].plot(time_E2, pos_E2, color = "k", linestyle = "--")
+axs2[1,0].plot(time_E2_analytical, x1_E2_analytical, color = "k")
+axs2[1,0].plot(time_E2, pos2_E2, color = "tab:red", linestyle = "--")
+axs2[1,0].plot(time_E2_analytical, x2_E2_analytical, color = "tab:red")
+
+axs2[0,1].plot(time_R1, pos_R1, color = "k", linestyle = "--")
+axs2[0,1].plot(time_R1_analytical, x1_R1_analytical, color = "k")
+axs2[0,1].plot(time_R1, pos2_R1, color = "tab:red", linestyle = "--")
+axs2[0,1].plot(time_R1_analytical, x2_R1_analytical, color = "tab:red")
+
+axs2[1,1].plot(time_R2, pos_R2, color = "k", linestyle = "--")
+axs2[1,1].plot(time_R2_analytical, x1_R2_analytical, color = "k")
+axs2[1,1].plot(time_R2, pos2_R2, color = "tab:red", linestyle = "--")
+axs2[1,1].plot(time_R2_analytical, x2_R2_analytical, color = "tab:red")
+
+fig2.legend(loc='upper center',bbox_to_anchor = (0.5, 1.20),ncol = 2,frameon=False)
+
+save_path = os.path.join(root_folder, "outputs", f"Coupled_Oscillators_step_t005_t001.pdf")
+fig2.savefig(save_path, bbox_inches = 'tight')
+
+plt.show()
+
+"""
 for i, time_step in enumerate(step_array):
     # Open data file
     root_folder = os.path.dirname(os.path.dirname(__file__))
@@ -67,7 +161,7 @@ for i, time_step in enumerate(step_array):
     # Graph formatting
     # Formatting preamble
     cm = 1/2.54 #cm in inches
-    mpl.rcParams['text.usetex'] = True
+    # mpl.rcParams['text.usetex'] = True
     mpl.rcParams.update({'font.size': 14})
     fig, axs = plt.subplots(3, 1, figsize=(17*cm, 20*cm), layout="constrained")
 
@@ -110,3 +204,4 @@ for i, time_step in enumerate(step_array):
     fig.savefig(save_path1, bbox_inches = 'tight')
     fig.savefig(save_path2, bbox_inches = 'tight')
     plt.show()
+"""
