@@ -165,6 +165,10 @@ int main(int argc, char* argv[]) {
     const Velocity& v2 = nodes[1].get<Velocity>();
     const Acceleration& a1 = nodes[0].get<Acceleration>();
     const Acceleration& a2 = nodes[1].get<Acceleration>();
+    const Mass& a1 = nodes[0].get<Mass>();
+    const Mass& a2 = nodes[1].get<Mass>();
+    double Energy;
+    Energy = 
     MyFile << 0 << ", " << p1.x << ", " << v1.x << "," << a1.x << "," << p2.x << ", " 
     << v2.x << "," << a2.x << std::endl; 
     // Add Bulk tag to each entity in nodes

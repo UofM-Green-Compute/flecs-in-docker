@@ -7,6 +7,7 @@ import os
 # Material Variables
 mass = 3
 k = 4 * np.pi**2
+length = 1 # natural length of spring
 omega = np.sqrt((3*k)/mass)
 step_array = np.array([0.01, 0.005, 0.001])
 
@@ -37,11 +38,13 @@ def a2model(t):
 # *** Make a 2x2 grid of plots *** 
 
 # Open files
-root_folder = os.path.dirname(os.path.dirname(__file__))
-Euler_t005_path = os.path.join(root_folder, "outputs", f"Coupled_Oscillators_step={0.05:.6f}.txt") # E1 
-Euler_t001_path = os.path.join(root_folder, "outputs", f"Coupled_Oscillators_step={0.01:.6f}.txt") # E2
-Runge_t005_path = "/Users/oluwoledelano/ECS_Development/flecs-in-docker/starter-runge/outputs/Coupled_Oscillators_step=0.050000.txt"
-Runge_t001_path = "/Users/oluwoledelano/ECS_Development/flecs-in-docker/starter-runge/outputs/Coupled_Oscillators_step=0.010000.txt"
+root_folder = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+euler_folder = os.path.dirname(os.path.dirname(__file__))
+runge_folder = os.path.join(root_folder, "starter-runge")
+Euler_t005_path = os.path.join(euler_folder, "outputs", f"Coupled_Oscillators_step={0.05:.6f}.txt") #E1
+Euler_t001_path = os.path.join(euler_folder, "outputs", f"Coupled_Oscillators_step={0.01:.6f}.txt") #E2
+Runge_t005_path = os.path.join(runge_folder, "outputs", f"Coupled_Oscillators_step={0.05:.6f}.txt") #E3
+Runge_t001_path = os.path.join(runge_folder, "outputs", f"Coupled_Oscillators_step={0.01:.6f}.txt") #E4
 
 # Save data from files into an array
 data_E1 = np.genfromtxt(Euler_t005_path, skip_header=2, delimiter=",") #
@@ -68,7 +71,7 @@ pos2_R2 = data_R2[:,4]
 
 # Graph formatting
 cm = 1/2.54 #cm in inches
-# mpl.rcParams['text.usetex'] = True
+mpl.rcParams['text.usetex'] = True
 mpl.rcParams.update({'font.size': 14})
 fig2, axs2 = plt.subplots(2, 2, figsize=(17*cm, 10*cm), layout="constrained")
 
@@ -123,11 +126,18 @@ axs2[1,1].plot(time_R2_analytical, x2_R2_analytical, color = "tab:red")
 fig2.legend(loc='upper center',bbox_to_anchor = (0.5, 1.20),ncol = 2,frameon=False)
 
 save_path = os.path.join(root_folder, "outputs", f"Coupled_Oscillators_step_t005_t001.pdf")
-fig2.savefig(save_path, bbox_inches = 'tight')
+#fig2.savefig(save_path, bbox_inches = 'tight')
 
 plt.show()
 
-"""
+Energy_list = np.array([])
+timeStep_list = np.array([])
+fig1, ax1 = plt.subplots(figsize=(17*cm, 10*cm), layout="constrained")
+
+fig1.supxlabel("Time t/s")
+fig1.supylabel("Position x/s")
+ax1.label_outer()
+ax1.tick_params(axis='both',direction='in')
 for i, time_step in enumerate(step_array):
     # Open data file
     root_folder = os.path.dirname(os.path.dirname(__file__))
@@ -147,17 +157,19 @@ for i, time_step in enumerate(step_array):
     vel2 = data[:,5]
     acc2 = data[:,6]
 
-    time_analytical = np.linspace(0, np.max(time), 10000)
+    Energy = (mass*(vel1**2))/2 + (mass*(vel1**2))/2 + k*((pos1-length)**2+
+                                                          (pos2-pos1-length)**2+
+                                                          (2*length-pos2)**2)/2
 
-    x1_analytical = x1model(time_analytical)
-    x2_analytical = x2model(time_analytical)
+    ax1.plot(Energy_list, pos_E1, color = "k", linestyle = "--", label="Particle 1 Simulated")
 
-    v1_analytical = v1model(time_analytical)
-    v2_analytical = v2model(time_analytical)
 
-    a1_analytical = a1model(time_analytical)
-    a2_analytical = a2model(time_analytical)
+fig2.legend(loc='upper center',bbox_to_anchor = (0.5, 1.20),ncol = 2,frameon=False)
+save_path = os.path.join(root_folder, "outputs", f"Coupled_Oscillators_step_t005_t001.pdf")
+#fig2.savefig(save_path, bbox_inches = 'tight')
+plt.show()
 
+"""
     # Graph formatting
     # Formatting preamble
     cm = 1/2.54 #cm in inches
