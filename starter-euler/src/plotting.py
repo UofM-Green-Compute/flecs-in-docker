@@ -3,13 +3,15 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import numpy as np
 import os
+from scipy.optimize import curve_fit
 
 # Material Variables
 mass = 3
 k = 4 * np.pi**2
 length = 1 # natural length of spring
 omega = np.sqrt((3*k)/mass)
-step_array = np.array([0.01, 0.005, 0.001])
+step_array = np.array([0.001, 0.0005, 0.0001, 0.00005, 0.00001])
+E0 = mass
 
 def x1model(t):
     x = 1-np.sqrt(mass/(3*k))*np.sin(omega*t)
@@ -34,6 +36,10 @@ def a1model(t):
 def a2model(t):
     a = -omega**2*np.sqrt(mass/(3*k))*np.sin(omega*t)
     return a
+
+def Emodel(t,tau):
+    log = t/tau
+    return log
 
 # *** Make a 2x2 grid of plots *** 
 
@@ -125,27 +131,61 @@ axs2[1,1].plot(time_R2_analytical, x2_R2_analytical, color = "tab:red")
 
 fig2.legend(loc='upper center',bbox_to_anchor = (0.5, 1.20),ncol = 2,frameon=False)
 
-save_path = os.path.join(root_folder, "outputs", f"Coupled_Oscillators_step_t005_t001.pdf")
-#fig2.savefig(save_path, bbox_inches = 'tight')
+save_path2 = os.path.join(root_folder, "outputs", f"Coupled_Oscillators_step_t005_t001.pdf")
+#fig2.savefig(save_path2, bbox_inches = 'tight')
 
 plt.show()
 
 Energy_list = np.array([])
 timeStep_list = np.array([])
-fig1, ax1 = plt.subplots(figsize=(17*cm, 10*cm), layout="constrained")
+fig1, axs1 = plt.subplots(1, 2, figsize=(17*cm, 10*cm), layout="constrained")
 
-fig1.supxlabel("Time t/s")
-fig1.supylabel("Position x/s")
-ax1.label_outer()
-ax1.tick_params(axis='both',direction='in')
+axs1[0].set_xlabel("Time/s")
+axs1[0].set_ylabel("ln(E/E_0)")
+axs1[0].tick_params(axis='both',direction='in')
+
+tau_euler = np.array([])
 for i, time_step in enumerate(step_array):
     # Open data file
     root_folder = os.path.dirname(os.path.dirname(__file__))
-    data_path = os.path.join(root_folder, "outputs", 
+    data_path = os.path.join(euler_folder, "outputs", 
                              f"Coupled_Oscillators_step={time_step:.6f}.txt")
-    save_path1 = os.path.join(root_folder, "outputs", 
+    save_path1 = os.path.join(euler_folder, "outputs", 
                               f"Coupled_Oscillators_step={time_step:.6f}.pdf")
-    save_path2 = os.path.join(root_folder, "outputs", 
+    save_path2 = os.path.join(euler_folder, "outputs", 
+                              f"Coupled_Oscillators_step={time_step:.6f}.png")
+    
+    
+    data = np.genfromtxt(data_path, skip_header=2, delimiter=",")
+    time = data[:,0]
+    pos1 = data[:,1]
+    vel1 = data[:,2]
+    acc1 = data[:,3]
+    pos2 = data[:,4]
+    vel2 = data[:,5]
+    acc2 = data[:,6]
+
+    Energy = (mass*(vel1**2))/2 + (mass*(vel1**2))/2 + k*((pos1-length)**2+
+                                                          (pos2-pos1-length)**2+
+                                                          (2*length-pos2)**2)/2
+    print(Energy/E0)
+    
+    energy_ratio = Energy/E0
+    popt, pcov = curve_fit(Emodel, time, np.log(energy_ratio))
+    print(popt)
+    tau = popt[0]
+    tau_euler = np.append(tau_euler, tau)
+    axs1[0].plot(time, np.log(energy_ratio), color = "k", linestyle = "-")
+
+tau_runge = np.array([])
+for i, time_step in enumerate(step_array):
+    # Open data file
+    root_folder = os.path.dirname(os.path.dirname(__file__))
+    data_path = os.path.join(runge_folder, "outputs", 
+                             f"Coupled_Oscillators_step={time_step:.6f}.txt")
+    save_path1 = os.path.join(runge_folder, "outputs", 
+                              f"Coupled_Oscillators_step={time_step:.6f}.pdf")
+    save_path2 = os.path.join(runge_folder, "outputs", 
                               f"Coupled_Oscillators_step={time_step:.6f}.png")
     
     data = np.genfromtxt(data_path, skip_header=2, delimiter=",")
@@ -160,17 +200,36 @@ for i, time_step in enumerate(step_array):
     Energy = (mass*(vel1**2))/2 + (mass*(vel1**2))/2 + k*((pos1-length)**2+
                                                           (pos2-pos1-length)**2+
                                                           (2*length-pos2)**2)/2
+    energy_ratio = Energy/E0
+    popt, pcov = curve_fit(Emodel, time, np.log(energy_ratio))
+    tau = popt[0]
+    tau_runge = np.append(tau_runge, tau)
+    axs1[0].plot(time, np.log(Energy/mass), color = "k", linestyle = "--")
 
-    ax1.plot(Energy_list, pos_E1, color = "k", linestyle = "--", label="Particle 1 Simulated")
+#handles, labels = ax1.get_legend_handles_labels()
+#leg = fig1.legend(handles, labels, loc='upper center',
+#                bbox_to_anchor=(0.5, 0), ncol = 3)
+load_path_eulerEnergy = os.path.join(euler_folder, "outputs", "energy.txt")
+load_path_rungeEnergy = os.path.join(runge_folder, "outputs", "energy.txt")
 
+eulerDataEnergy = np.genfromtxt(load_path_eulerEnergy, delimiter=",")[:,1]
+rungeDataEnergy = np.genfromtxt(load_path_rungeEnergy, delimiter=",")[:,1]
 
-fig2.legend(loc='upper center',bbox_to_anchor = (0.5, 1.20),ncol = 2,frameon=False)
-save_path = os.path.join(root_folder, "outputs", f"Coupled_Oscillators_step_t005_t001.pdf")
-#fig2.savefig(save_path, bbox_inches = 'tight')
+eulerCPU = eulerDataEnergy[2:]
+rungeCPU = rungeDataEnergy[3:]
+axs1[1].set_xlabel("CPU Energy/J")
+axs1[1].set_ylabel("tau/s")
+axs1[1].tick_params(axis='both',direction='in')
+axs1[1].plot(eulerCPU, tau_euler, linestyle = "-", color = "k", label = "Euler Method")
+axs1[1].plot(rungeCPU, tau_runge, linestyle = "--", color = "k", label = "Runge-Kutta Method")
+handles, labels = axs1[1].get_legend_handles_labels()
+fig1.legend(loc='upper center',bbox_to_anchor = (0.5, 1.20),ncol = 2,frameon=False)
+save_path1 = os.path.join(root_folder, "outputs", f"tauvsEnergy.pdf")
+fig1.savefig(save_path1, bbox_inches = 'tight')
 plt.show()
 
 """
-    # Graph formatting
+    #Graph formatting
     # Formatting preamble
     cm = 1/2.54 #cm in inches
     # mpl.rcParams['text.usetex'] = True

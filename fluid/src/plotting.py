@@ -31,6 +31,7 @@ densityData = []
 densityImages = []
 for i in range(int(numberOfFiles)-5):
     time = i * timeStep
+    print(f'{time:.6f}')
     location  = os.path.join(dataFolder, f"density_t={time:.6f}.txt")
     data = np.genfromtxt(location, delimiter = ",")
     densityData.append(data)
@@ -60,38 +61,160 @@ for i in range(int(numberOfFiles)-5):
 verticalMin, verticalMax = np.min(verticalData), np.max(verticalData)
 
 timePlots = 4
-final_save_path = os.path.join(dataFolder, f"report_fluids.pdf")
-densityPlot = sns.heatmap(densityData[i], vmin=densityMin, vmax=densityMax, cmap='gray_r')
+final_save_path1 = os.path.join(dataFolder, f"fluids_density.pdf")
 horizontalData = np.array([horizontalData])
 verticalData = np.array([verticalData])
 speedData = np.sqrt(horizontalData**2+verticalData**2)
 speedMin = np.min(speedData)
 speedMax = np.max(speedData)
-titles = ["Density", "Streamfunction", "Fluid Speed"]
-fig, axs = plt.subplots(4, 3, sharex='col', figsize=(17*cm, 12*cm), layout="constrained")
-for i in range(timePlots):
-    for j in range(3):
-        axs[i,j].tick_params(
+
+fig, axs = plt.subplots(2, 2, sharey='row', figsize=(17*cm, 10*cm), layout="constrained")
+for i in range(4):
+    print(i)
+    print(densityData[i+1])
+    if i == 0:
+        densityPlot1 = sns.heatmap(densityData[i+1], vmin=densityMin, vmax=densityMax, cmap = sns.color_palette("flare", as_cmap=True), 
+                              ax = axs[0, 0], cbar = False)
+        for _, spine in densityPlot1.spines.items():
+            spine.set_visible(True)
+    if i == 1:
+        densityPlot2 = sns.heatmap(densityData[i+1], vmin=densityMin, vmax=densityMax, cmap = sns.color_palette("flare", as_cmap=True), 
+                              ax = axs[0, 1], cbar = False)
+        for _, spine in densityPlot2.spines.items():
+            spine.set_visible(True)
+    if i == 2:
+        densityPlot3 = sns.heatmap(densityData[i+1], vmin=densityMin, vmax=densityMax, cmap = sns.color_palette("flare", as_cmap=True), 
+                              ax = axs[1, 0], cbar = False)
+        for _, spine in densityPlot3.spines.items():
+            spine.set_visible(True)
+    if i == 3:
+        densityPlot4 = sns.heatmap(densityData[i+1], vmin=densityMin, vmax=densityMax, cmap = sns.color_palette("flare", as_cmap=True), 
+                              ax = axs[1, 1], cbar = False)
+        for _, spine in densityPlot4.spines.items():
+            spine.set_visible(True)
+    axs[0,0].tick_params(
             bottom=False, top=False, left=False, right=False,
             labelbottom=False, labeltop=False, labelleft=False, labelright=False
         )
-        if (i == 0):
-            axs[0, j].set_title(titles[j])
+    axs[0,1].tick_params(
+            bottom=False, top=False, left=False, right=False,
+            labelbottom=False, labeltop=False, labelleft=False, labelright=False
+        )
+    axs[1,0].tick_params(
+            bottom=False, top=False, left=False, right=False,
+            labelbottom=False, labeltop=False, labelleft=False, labelright=False
+        )
+    axs[1,1].tick_params(
+            bottom=False, top=False, left=False, right=False,
+            labelbottom=False, labeltop=False, labelleft=False, labelright=False
+        )
+    
+fig.suptitle('Density', fontsize=20)
+mappable1 = densityPlot1.collections[0]
+fig.colorbar(mappable1, ax=axs, orientation='vertical', location="right", fraction=.1)
+fig.savefig(final_save_path1, dpi = 600, bbox_inches = 'tight')
+plt.show()
+
+final_save_path2 = os.path.join(dataFolder, f"speed.pdf")
+fig, axs = plt.subplots(2, 2, sharex='col', figsize=(17*cm, 10*cm), layout="constrained")
+for i in range(4):
     u = horizontalData[0,i+1]
     v = verticalData[0,i+1]
     x = np.arange(0, boxLength)
     y = np.arange(0, boxWidth)
     X, Y = np.meshgrid(x, y)
-    densityPlot = sns.heatmap(densityData[i+1], vmin=densityMin, vmax=densityMax, cmap = 'gray_r', 
-                              ax = axs[i, 0], cbar = False)
-    for _, spine in densityPlot.spines.items():
-        spine.set_visible(True)
-    axs[i,1].streamplot(X, Y, u, v, color = 'k', density = 2, linewidth=0.1)
-    speedPlot = sns.heatmap(speedData[0,i+1], vmin=speedMin, vmax = speedMax, cmap = 'gray_r', 
-                            ax = axs[i, 2], cbar = False)
-    for _, spine in speedPlot.spines.items():
-        spine.set_visible(True)
-fig.savefig(final_save_path, bbox_inches = 'tight')
+    if i == 0:
+        speedPlot1 = sns.heatmap(speedData[0,i+1], vmin=speedMin, vmax = speedMax, 
+                                cmap = sns.color_palette("YlOrBr", as_cmap=True), 
+                                ax = axs[0, 0], cbar = False)
+        for _, spine in speedPlot1.spines.items():
+            spine.set_visible(True)
+    if i == 1:
+        speedPlot2 = sns.heatmap(speedData[0,i+1], vmin=speedMin, vmax = speedMax, 
+                                cmap = sns.color_palette("YlOrBr", as_cmap=True), ax = axs[0, 1], 
+                                cbar = False)
+        for _, spine in speedPlot2.spines.items():
+            spine.set_visible(True)
+    if i == 2:
+        speedPlot3 = sns.heatmap(speedData[0,i+1], vmin=speedMin, vmax = speedMax, 
+                                cmap = sns.color_palette("YlOrBr", as_cmap=True), ax = axs[1, 0],
+                                cbar = False)
+        for _, spine in speedPlot3.spines.items():
+            spine.set_visible(True)
+    if i == 3:
+        speedPlot4 = sns.heatmap(speedData[0,i+1], vmin=speedMin, vmax = speedMax, 
+                                cmap = sns.color_palette("YlOrBr", as_cmap=True), ax = axs[1, 1],
+                                cbar = False)
+        for _, spine in speedPlot4.spines.items():
+            spine.set_visible(True)
+    axs[0,0].tick_params(
+            bottom=False, top=False, left=False, right=False,
+            labelbottom=False, labeltop=False, labelleft=False, labelright=False
+        )
+    axs[0,1].tick_params(
+            bottom=False, top=False, left=False, right=False,
+            labelbottom=False, labeltop=False, labelleft=False, labelright=False
+        )
+    axs[1,0].tick_params(
+            bottom=False, top=False, left=False, right=False,
+            labelbottom=False, labeltop=False, labelleft=False, labelright=False
+        )
+    axs[1,1].tick_params(
+            bottom=False, top=False, left=False, right=False,
+            labelbottom=False, labeltop=False, labelleft=False, labelright=False
+        )
+    
+
+axs[1,0].set_xticks([0, 50, 100, 150, 200])
+axs[1,1].set_xticks([0, 50, 100, 150, 200])
+
+axs[1,0].set_yticks([0, 50, 100])
+axs[0,0].set_yticks([0, 50, 100])
+
+axs[1,0].set_ylabel(r'y/cm')
+axs[0,0].set_ylabel(r'y/cm')
+ 
+mappable2 = speedPlot1.collections[0]
+fig.suptitle('Speed', fontsize=20)
+fig.colorbar(mappable1, ax=axs, orientation='vertical', location="right", fraction=.1)
+fig.savefig(final_save_path2, dpi = 600, bbox_inches = 'tight')
+plt.show()
+
+final_save_path3 = os.path.join(dataFolder, f"streamfunctions.pdf")
+fig, axs = plt.subplots(2, 2, sharex='col', figsize=(17*cm, 12*cm), layout="constrained")
+for i in range(4):
+    u = horizontalData[0,i+1]
+    v = verticalData[0,i+1]
+    x = np.arange(0, boxLength)
+    y = np.arange(0, boxWidth)
+    X, Y = np.meshgrid(x, y)
+    if i == 0:
+        axs[0,0].streamplot(X, Y, u, v, color = 'k', density = 2, linewidth=0.1)
+    if i == 1:
+        axs[0,1].streamplot(X, Y, u, v, color = 'k', density = 2, linewidth=0.1)
+    if i == 2:
+        axs[1,0].streamplot(X, Y, u, v, color = 'k', density = 2, linewidth=0.1)
+    if i == 3:
+        axs[1,1].streamplot(X, Y, u, v, color = 'k', density = 2, linewidth=0.1)
+    axs[0,0].tick_params(
+            bottom=False, top=False, left=False, right=False,
+            labelbottom=False, labeltop=False, labelleft=False, labelright=False
+        )
+    axs[0,1].tick_params(
+            bottom=False, top=False, left=False, right=False,
+            labelbottom=False, labeltop=False, labelleft=False, labelright=False
+        )
+    axs[1,0].tick_params(
+            bottom=False, top=False, left=False, right=False,
+            labelbottom=False, labeltop=False, labelleft=False, labelright=False
+        )
+    axs[1,1].tick_params(
+            bottom=False, top=False, left=False, right=False,
+            labelbottom=False, labeltop=False, labelleft=False, labelright=False
+        )
+
+fig.suptitle('Streamfunction', fontsize=20)
+fig.savefig(final_save_path3, bbox_inches = 'tight')
 plt.show()
 
 '''

@@ -41,12 +41,10 @@ for i in range(11):
     plt.plot(x_computational, phi_computational, color = "k", alpha = (i+1)/11, label = f"t = {t}s")
 plt.plot(x_model, phi_model, color = "tab:red", linestyle = "-", label = "Exact Steady State")
 ax = plt.gca()
-# Set position and bounds of axes
 ax.spines['bottom'].set_position(('data', 0))
 ax.spines['top'].set_position(('data', 1))
 ax.spines['left'].set_bounds(0, End)
 ax.spines['right'].set_bounds(0, End)
-# Set ticks in correct position
 ax.xaxis.set_ticks_position('bottom')
 ax.xaxis.set_label_position('bottom')
 ax.yaxis.set_ticks([tick for tick in ax.get_yticks() if (tick >= 0 and tick <= End)])

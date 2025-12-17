@@ -9,12 +9,12 @@ This code looks at the dynamical evolution of a compressible
 #include <vector>
 
 // Number of nodes in x-axis. Also equal to the length in unit of node distance
-const double nodeDistance = 1; // node distance in M
+const double nodeDistance =0.01; // node distance in M
 
 const int Nx = 100; // Number of from left wall to middle wall and from middle wall to right wall
 const int Ny = 40; // Number of nodes from bottom wall to hole and hole to top wall
 const int Nh = 20;  // Width of hole in middle wall in units of node distance
-const double TIMESTEP = 0.00001;
+const double TIMESTEP = 0.0000001;
 const int NUMBERSTEPS = 100000;
 const int FILENUMBER = 11;
 const int SAVESTEP = NUMBERSTEPS/(FILENUMBER-1);
