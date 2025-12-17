@@ -2,18 +2,13 @@
 Oluwole Delano | 13/11/25 
 Simulating an ideal gas using smooth particle hydridynamics in ECS
 
-** Questions / Next steps** :
+** Questions / Next steps ** :
 - Should I incluide "self" particle in density sums? 
   When self particle is included in force sums it leads to weird behaviour (strange attractor)
 - Rescale units 
 - Time step check doesnt seem to be working perfectly
 
-** Results to extract ** 
-- Density plots at 6 time steps
-- Energy: Should be ~k_b * T * NO_PARTICLES | Calculate change in energy over simulations
-
-Possible extensions
-- More advanced time stepping (Runge-Kutta)
+** Possible extensions **
 - Classical limit of an ideal gas
 - Calculate total energy and check how well its conserved 
 - Put in Leannard Jones potential by hand? 
@@ -54,15 +49,6 @@ struct Mass { double m; };
 struct ParticleIndex {int i; }; 
 struct Box {int k; }; 
 
-// Constants
-int NO_PARTICLES = 50; 
-const int STEPS = 4000; // Number of time steps
-double DT = 0.00001;    // Time step 
-double PARTICLE_MASS = 1.6735575 * pow(10,-27); // Mass of Hydrogen
-double TEST_SCALE_FACTOR = 1 * pow(10,30); 
-double GAMBEL_MASS = 20 ; // Choice used in Monaghan and Gingold 1979 
-double NO_GAMBEL_DATA_POINTS = 50; // Number of data points stored for gambel error estimation
-
 // Walls of the box ----
 static constexpr double GX = 5;
 static constexpr double GY = 5;
@@ -77,8 +63,43 @@ double K_B = 1.380649 * pow(10,-23);  // Units: m^2 kg s^-2 K^-1
 double SIGMA = 10 / (7 * M_PI);       // Normalisation constant for kernel in two dimensions
 double NO_DIMENSIONS = 2.0; 
 double COURANT_NO = 1;                // Courant number
+
 // Mathematical constants
-double CONST_H = 1; // Parameter determining size of domain around particle 
+double CONST_H = 0.5; // Parameter determining size of domain around particle 
+
+// Constants
+int NO_PARTICLES = 50; 
+const int STEPS = 1; // Number of time steps
+double DT = 0.00001;    // Time step 
+double PARTICLE_MASS = 1.6735575 * pow(10,-27); // Mass of Hydrogen
+double TEST_SCALE_FACTOR = 1 * pow(10,30); 
+
+// Gambel error estimation constants
+double NO_GAMBEL_DATA_POINTS = 20; // Number of data points stored for gambel error estimation graph
+double NO_GAMBEL_PARTICLES = 50;  // Number of samples taken from gambel distribution  
+double GAMBEL_RANGE = 50; // Range of Gambel distribution considered
+double GAMBEL_MASS = (  exp(-exp(-GAMBEL_RANGE)) - exp(-(exp(GAMBEL_RANGE))) ) / NO_GAMBEL_PARTICLES ; // Integrate gambel density to find mass of each particle
+
+// Interpolant function (Gaussian) -- Monaghan 1992 Equation 2.6
+double gaussian_W(double r, double h) { return ( 1 / (h * sqrt(M_PI)) ) * exp( - (pow(r,2.0) / pow(h,2.0)) ); }
+
+// Interpolant function 2 (Spline) -- Monaghan 1992 Section 7
+double spline_W(double r,double h) { 
+    double q = r / h; 
+    double c = SIGMA / pow(CONST_H,NO_DIMENSIONS); 
+
+    if( (q >= 0) && (q <= 1) )
+    {
+        return c * ( 1 - ((3/2) * pow(q,2)) + ((3/4) * pow(q,3)) ); 
+    }
+    else if( (q >= 1) && (q <= 2) )
+    {
+        return c * ((1/4) * pow((2-q),3)); 
+    }
+    else {
+        return 0; 
+    }
+}
 
 // Boltzman distribution
 // Probability that a particle has velocity between v and v+d^3v = dv * maxwell_boltzmann()
@@ -116,29 +137,21 @@ double metropolis_hastings_gambel(double x_i, double delta_i, double r)
 
     double alpha = std::min(1.0,(w_trial/w_i)); 
 
-    if (r < alpha && (x_trial < GX) && (x_trial > -GX)) { return x_trial; }
+    if (r < alpha && (x_trial < GAMBEL_RANGE) && (x_trial > -GAMBEL_RANGE)) { return x_trial; }
     else { return x_i; }
 }
 
-// Interpolant function (Gaussian) -- Monaghan 1992 Equation 2.6
-double gaussian_W(double r, double h) { return ( 1 / (h * sqrt(M_PI)) ) * exp( - (pow(r,2.0) / pow(h,2.0)) ); }
+// Function to caluclate density rho at some position
+double density_gambel(double position_r, std::vector<double> configuration, double h){
+    double Density = 0; 
 
-// Interpolant function 2 (Spline) -- Monaghan 1992 Section 7
-double spline_W(double r) { 
-    double q = r / CONST_H; 
-    double c = SIGMA / pow(CONST_H,NO_DIMENSIONS); 
+    for (int j=0; j<configuration.size(); j++)
+    {
+        double R = position_r - configuration[j]; 
+        Density += GAMBEL_MASS * spline_W(R,h); 
+    }
 
-    if( (q >= 0) && (q <= 1) )
-    {
-        return c * ( 1 - ((3/2) * pow(q,2)) + ((3/4) * pow(q,3)) ); 
-    }
-    else if( (q >= 1) && (q <= 2) )
-    {
-        return c * ((1/4) * pow((2-q),3)); 
-    }
-    else {
-        return 0; 
-    }
+    return Density; 
 }
 
 // Function to calculate vector distance between particles 
@@ -169,19 +182,6 @@ double density(std::vector<double> position_r, std::vector<flecs::entity> Partic
         std::vector<double> distance_vec = vector_distance(position_r,Particles[j]); 
         double R = absolute_distance(distance_vec);  
         Density += Particles[j].get<Mass>().m * gaussian_W(R,CONST_H); 
-    }
-
-    return Density; 
-}
-
-// Function to caluclate density rho at some position
-double density_gambel(double position_r, std::vector<double> configuration, double h){
-    double Density = 0; 
-
-    for (int j=0; j<configuration.size(); j++)
-    {
-        double R = position_r - configuration[j]; 
-        Density += GAMBEL_MASS * gaussian_W(R,h); 
     }
 
     return Density; 
@@ -365,14 +365,30 @@ int main(int argc, char* argv[]) {
     std::ofstream MyFile_gambel;
     std::string fileGambel="";
     std::string path = "/Users/oluwoledelano/ECS_Development/flecs-in-docker/Sketches/OD/SPH_Runge/outputs/"; 
-    if(NO_PARTICLES == 20) { fileGambel=path+"Gambel_Density_ParticleNo=20.txt"; }
-    else if(NO_PARTICLES == 50) { fileGambel=path+"Gambel_Density_ParticleNo=50.txt"; }
-    else if(NO_PARTICLES == 100) { fileGambel=path+"Gambel_Density_ParticleNo=100.txt"; }
+    if(NO_GAMBEL_PARTICLES == 20) { fileGambel=path+"Gambel_Density_ParticleNo=20.txt"; }
+    else if(NO_GAMBEL_PARTICLES == 50) { fileGambel=path+"Gambel_Density_ParticleNo=50.txt"; }
+    else if(NO_GAMBEL_PARTICLES == 75) { fileGambel=path+"Gambel_Density_ParticleNo=75.txt"; }
+    else if(NO_GAMBEL_PARTICLES == 100) { fileGambel=path+"Gambel_Density_ParticleNo=100.txt"; }
+    else if(NO_GAMBEL_PARTICLES == 200) { fileGambel=path+"Gambel_Density_ParticleNo=200.txt"; }
     else { std::cout<<"ERROR: No Gambel file matching this particle number"<<std::endl; }
     MyFile_gambel.open(fileGambel);
     if (!MyFile_gambel.is_open())
     {
         std::cout<<"Error in opening gambel density file"<<std::endl; 
+        return 1; 
+    }
+
+    // Open file for writing - Particle number density file
+    std::ofstream MyFile_NoDensity;
+    std::string fileNoDensity="";
+    if(NO_PARTICLES == 20) { fileNoDensity=path+"Particle_Number_Density_No=20.txt"; }
+    else if(NO_PARTICLES == 50) { fileNoDensity=path+"Particle_Number_Density_No=50.txt"; }
+    else if(NO_PARTICLES == 100) { fileNoDensity=path+"Particle_Number_Density_No=100.txt"; }
+    else { std::cout<<"ERROR: No particle number density file matching this particle number"<<std::endl; }
+    MyFile_NoDensity.open(fileNoDensity);
+    if (!MyFile_NoDensity.is_open())
+    {
+        std::cout<<"Error in opening particle number density file"<<std::endl; 
         return 1; 
     }
 
@@ -397,10 +413,10 @@ int main(int argc, char* argv[]) {
 
     // Tools for picking random numbers
     std::mt19937 rng( std::random_device{}()  ) ; // Initialise a random number generator with random device (for actual use)
-    std::uniform_real_distribution<double> UposX(0, GX); 
+    std::uniform_real_distribution<double> UposX(GX, GX+GX2); 
     std::uniform_real_distribution<double> UposY(0, GY); 
     std::uniform_real_distribution<double> Uvel(-5000, 5000);
-    std::uniform_real_distribution<double> Ugambel(-GX, GX);
+    std::uniform_real_distribution<double> Ugambel(-GAMBEL_RANGE, GAMBEL_RANGE);
     std::uniform_real_distribution<double> ZeroOne(0, 1);
     std::uniform_real_distribution<double> DELTA(-0.1, 0.1);
     std::uniform_real_distribution<double> DELTAGAMBEL(-0.1, 0.1);
@@ -460,7 +476,7 @@ int main(int argc, char* argv[]) {
                 .set<AccelerationK2>({0.0, 0.0})
                 .set<AccelerationK3>({0.0, 0.0})
                 .set<Mass>({PARTICLE_MASS})
-                .set<Box>({0})); 
+                .set<Box>({1})); 
     } 
 
     // Note: Systems run in order they are coded in
@@ -668,10 +684,10 @@ int main(int argc, char* argv[]) {
     // Sample from Gambel density
     double p_x = Ugambel(rng);
     std::vector<double> particle_config; 
-    particle_config.reserve(NO_PARTICLES); 
+    particle_config.reserve(NO_GAMBEL_PARTICLES); 
     int k = 0; 
 
-    for(int i = 0; i < stationary_time + NO_PARTICLES*sample_interval; i++) 
+    for(int i = 0; i < stationary_time + NO_GAMBEL_PARTICLES*sample_interval; i++) 
     {
         double rx = ZeroOne(rng); 
         double deltax = DELTAGAMBEL(rng);
@@ -686,22 +702,19 @@ int main(int argc, char* argv[]) {
     }
 
     // Calculate density from Gambel  
-    double h = GX / NO_GAMBEL_DATA_POINTS;
+    double h = 0.1; 
     for(int i = 0; i < NO_GAMBEL_DATA_POINTS; i++){
         double sum = 0; 
         double avg = 0; 
 
-        for(int j = 0; j < NO_PARTICLES; j++)
+        for(int j = 0; j < NO_GAMBEL_PARTICLES; j++)
         { sum += abs( exact_gambel_density(particle_config[j]) - density_gambel(particle_config[j],particle_config,h) ); }
-        // std::cout<<"Adding "<<sum<<std::endl; std::cout<<"Exact gambel "<<exact_gambel_density(particle_config[j])<<" "<<particle_config[j]<<std::endl; 
-        // std::cout<<"SUM "<<sum<<std::endl; 
 
-        avg = sum / NO_PARTICLES; 
+        avg = sum / NO_GAMBEL_PARTICLES; 
 
         MyFile_gambel<<h<<","<<avg<<std::endl;
-        h += GX / 15; 
+        h += 0.1; 
     }
-
 
     for (int i = 0; i < STEPS; ++i) {
 
@@ -717,13 +730,22 @@ int main(int argc, char* argv[]) {
         {
             for(int j = 0; j < (GX+GX2)+1; j++)
             {
-                density_matrix[i].push_back(density({double(i),double(j)},particles)); 
-                if(j < (GX+GX2)) { MyFile_density<<density_matrix[i][j]<<","; }
-                else { MyFile_density<<density_matrix[i][j]<<std::endl; } 
-
-                std::cout<<i<<","<<j<<" "<<density_matrix[i][j]<<std::endl; 
+                density_matrix[GY-i].push_back(density({double(j),double(i)},particles)); 
+                if(j < (GX+GX2)) { MyFile_density<<density_matrix[GY-i][j]<<","; }
+                else { MyFile_density<<density_matrix[GY-i][j]<<std::endl; } 
             } 
         }
+
+        // Calculate the number of particles per box at each step
+        int box1 = 0; 
+        int box2 = 0; 
+        for(int i = 0; i < particles.size(); i++)
+        {
+            if(particles[i].get<Box>().k == 0){box1 += 1;}
+            else if(particles[i].get<Box>().k == 1){box2 += 1;}
+            else{std::cout<<"What the hell is happening"<<std::endl;}
+        }
+        MyFile_NoDensity<<box1<<","<<box2<<std::endl; 
     }
 
     MyFile.close(); 
