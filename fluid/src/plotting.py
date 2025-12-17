@@ -23,13 +23,14 @@ boxWidth = specsData[1]
 holeWidth = specsData[2]
 timeStep = specsData[3]
 numberOfFiles = specsData[4]
+nodeSpacing = 0.01
 
 delta = 1
 
 # Find density data for each time step and add to array
 densityData = []
 densityImages = []
-for i in range(int(numberOfFiles)-5):
+for i in range(int(numberOfFiles)-6):
     time = i * timeStep
     print(f'{time:.6f}')
     location  = os.path.join(dataFolder, f"density_t={time:.6f}.txt")
@@ -41,7 +42,7 @@ densityMin, densityMax = np.min(densityData), np.max(densityData)
 # Find Horizontal data for each time step and add to array
 horizontalData = []
 horizontalImages = []
-for i in range(int(numberOfFiles)-5):
+for i in range(int(numberOfFiles)-6):
     time = i * timeStep
     location  = os.path.join(dataFolder, f"horizontal_t={time:.6f}.txt")
     data = np.genfromtxt(location, delimiter = ",")
@@ -52,7 +53,7 @@ horizontalMin, horizontalMax = np.min(horizontalData), np.max(horizontalData)
 # Find Vertical data for each time step and add to array
 verticalData = []
 verticalImages = []
-for i in range(int(numberOfFiles)-5):
+for i in range(int(numberOfFiles)-6):
     time = i * timeStep
     location  = os.path.join(dataFolder, f"vertical_t={time:.6f}.txt")
     data = np.genfromtxt(location, delimiter = ",")
@@ -67,14 +68,12 @@ verticalData = np.array([verticalData])
 speedData = np.sqrt(horizontalData**2+verticalData**2)
 speedMin = np.min(speedData)
 speedMax = np.max(speedData)
-
 fig, axs = plt.subplots(2, 2, sharey='row', figsize=(17*cm, 10*cm), layout="constrained")
 for i in range(4):
-    print(i)
-    print(densityData[i+1])
     if i == 0:
         densityPlot1 = sns.heatmap(densityData[i+1], vmin=densityMin, vmax=densityMax, cmap = sns.color_palette("flare", as_cmap=True), 
                               ax = axs[0, 0], cbar = False)
+        print(densityData[i+1])
         for _, spine in densityPlot1.spines.items():
             spine.set_visible(True)
     if i == 1:
@@ -120,8 +119,8 @@ fig, axs = plt.subplots(2, 2, sharex='col', figsize=(17*cm, 10*cm), layout="cons
 for i in range(4):
     u = horizontalData[0,i+1]
     v = verticalData[0,i+1]
-    x = np.arange(0, boxLength)
-    y = np.arange(0, boxWidth)
+    x = np.arange(0, boxLength*100)
+    y = np.arange(0, boxWidth*100)
     X, Y = np.meshgrid(x, y)
     if i == 0:
         speedPlot1 = sns.heatmap(speedData[0,i+1], vmin=speedMin, vmax = speedMax, 
@@ -163,7 +162,6 @@ for i in range(4):
             bottom=False, top=False, left=False, right=False,
             labelbottom=False, labeltop=False, labelleft=False, labelright=False
         )
-    
 
 axs[1,0].set_xticks([0, 50, 100, 150, 200])
 axs[1,1].set_xticks([0, 50, 100, 150, 200])
@@ -176,7 +174,7 @@ axs[0,0].set_ylabel(r'y/cm')
  
 mappable2 = speedPlot1.collections[0]
 fig.suptitle('Speed', fontsize=20)
-fig.colorbar(mappable1, ax=axs, orientation='vertical', location="right", fraction=.1)
+fig.colorbar(mappable2, ax=axs, orientation='vertical', location="right", fraction=.1)
 fig.savefig(final_save_path2, dpi = 600, bbox_inches = 'tight')
 plt.show()
 
@@ -185,8 +183,8 @@ fig, axs = plt.subplots(2, 2, sharex='col', figsize=(17*cm, 12*cm), layout="cons
 for i in range(4):
     u = horizontalData[0,i+1]
     v = verticalData[0,i+1]
-    x = np.arange(0, boxLength)
-    y = np.arange(0, boxWidth)
+    x = np.arange(0, boxLength*100)
+    y = np.arange(0, boxWidth*100)
     X, Y = np.meshgrid(x, y)
     if i == 0:
         axs[0,0].streamplot(X, Y, u, v, color = 'k', density = 2, linewidth=0.1)
