@@ -16,10 +16,10 @@ Publish use of ECS in your domain of physics at least to Zenodo and arXiv
 
 ## Started
 
-[ ] Enabling 2 MPhys students to start working with Flecs
-[ ] Getting started with C++
-[ ] Getting started with flecs
-[ ] Understanding Git
+[X] Enabling 2 MPhys students to start working with Flecs
+[X] Getting started with C++
+[X] Getting started with flecs
+[X] Understanding Git
 
 
 ## First results
