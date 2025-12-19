@@ -1,0 +1,2 @@
+Box Length, Box Width, Hole Width, time step, number of files, Density 1, Density 2
+200, 100, 20, 0.1, 11, 1.292, 1

@@ -1,0 +1,1 @@
+This directory containes code to simulate a coupled oscillator. The python script animates graphs and particle motion.
