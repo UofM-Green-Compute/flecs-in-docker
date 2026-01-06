@@ -1,0 +1,4 @@
+Time step: 1e-05 | Number of time steps: 1 | Number of particles: 50
+System temperature: 10 | Particle masses: 1.67356e-27
+Box 1 width: 5 | Box 2 width: 5 | Height of both boxes: 5
+No of gambel density data points: 20
